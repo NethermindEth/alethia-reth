@@ -14,6 +14,8 @@ use std::{boxed::Box, sync::OnceLock};
 
 use crate::evm::spec::TaikoSpecId;
 
+pub mod l1sload;
+
 /// Taiko precompile provider
 #[derive(Debug, Clone)]
 pub struct TaikoPrecompiles {
@@ -57,10 +59,8 @@ pub fn ontake() -> &'static Precompiles {
 pub fn pacaya() -> &'static Precompiles {
     static INSTANCE: OnceLock<Precompiles> = OnceLock::new();
     INSTANCE.get_or_init(|| {
-        let precompiles = ontake().clone();
-        // Todo: Add Taiko-specific precompiles for Pacaya
-        // Example:
-        // precompiles.extend([secp256r1::P256VERIFY]);
+        let mut precompiles = ontake().clone();
+        precompiles.extend([l1sload::L1SLOAD]);
         precompiles
     })
 }
@@ -206,14 +206,32 @@ mod tests {
         let pacaya_count = pacaya.precompiles().addresses().count();
         let shasta_count = shasta.precompiles().addresses().count();
 
-        // For now they should be equal since no custom precompiles are added yet
-        assert_eq!(ontake_count, pacaya_count);
-        assert_eq!(pacaya_count, shasta_count);
+        // Pacaya should have one more precompile than Ontake (L1SLOAD)
+        assert_eq!(
+            pacaya_count,
+            ontake_count + 1,
+            "Pacaya should have L1SLOAD precompile added to Ontake"
+        );
+        // Shasta should have the same as Pacaya (inherits from Pacaya)
+        assert_eq!(shasta_count, pacaya_count, "Shasta inherits from Pacaya");
 
         // Genesis might be different if it uses a different base spec
         println!(
             "Precompile counts - Genesis: {}, Ontake: {}, Pacaya: {}, Shasta: {}",
             genesis_count, ontake_count, pacaya_count, shasta_count
+        );
+
+        // Test that Pacaya and Shasta contain the L1SLOAD precompile
+        let l1sload_addr = alloy_primitives::address!("0000000000000000000000000000000000010001");
+        let pacaya_addrs: Vec<_> = pacaya.precompiles().addresses().collect();
+        let shasta_addrs: Vec<_> = shasta.precompiles().addresses().collect();
+        let ontake_addrs: Vec<_> = ontake.precompiles().addresses().collect();
+
+        assert!(pacaya_addrs.contains(&&l1sload_addr), "Pacaya should contain L1SLOAD precompile");
+        assert!(shasta_addrs.contains(&&l1sload_addr), "Shasta should contain L1SLOAD precompile");
+        assert!(
+            !ontake_addrs.contains(&&l1sload_addr),
+            "Ontake should NOT contain L1SLOAD precompile"
         );
     }
 
@@ -352,9 +370,24 @@ mod tests {
         assert!(pacaya_count > 0, "Pacaya should have precompiles");
         assert!(shasta_count > 0, "Shasta should have precompiles");
 
-        // Since they inherit from each other, they should have at least the same count
-        assert_eq!(ontake_count, pacaya_count, "Pacaya inherits from Ontake");
-        assert_eq!(pacaya_count, shasta_count, "Shasta inherits from Pacaya");
+        // Pacaya should have more precompiles than Ontake (adds L1SLOAD)
+        assert_eq!(
+            pacaya_count,
+            ontake_count + 1,
+            "Pacaya should have L1SLOAD added to Ontake precompiles"
+        );
+        // Shasta inherits from Pacaya, so should have the same count
+        assert_eq!(shasta_count, pacaya_count, "Shasta inherits from Pacaya");
+
+        // Test that L1SLOAD is present in Pacaya and Shasta but not Ontake
+        let l1sload_addr = alloy_primitives::address!("0000000000000000000000000000000000010001");
+        let ontake_addrs: Vec<_> = ontake_precompiles.addresses().collect();
+        let pacaya_addrs: Vec<_> = pacaya_precompiles.addresses().collect();
+        let shasta_addrs: Vec<_> = shasta_precompiles.addresses().collect();
+
+        assert!(!ontake_addrs.contains(&&l1sload_addr), "Ontake should not have L1SLOAD");
+        assert!(pacaya_addrs.contains(&&l1sload_addr), "Pacaya should have L1SLOAD");
+        assert!(shasta_addrs.contains(&&l1sload_addr), "Shasta should have L1SLOAD");
     }
 
     #[test]
@@ -385,5 +418,44 @@ mod tests {
                 spec
             );
         }
+    }
+
+    #[test]
+    fn test_l1sload_precompile_integration() {
+        // Test that L1SLOAD is properly integrated in Pacaya and Shasta specs
+        let l1sload_addr = alloy_primitives::address!("0000000000000000000000000000000000010001");
+
+        // Test with TaikoPrecompiles instances
+        let ontake_precompiles = TaikoPrecompiles::new_with_spec(TaikoSpecId::ONTAKE);
+        let pacaya_precompiles = TaikoPrecompiles::new_with_spec(TaikoSpecId::PACAYA);
+        let shasta_precompiles = TaikoPrecompiles::new_with_spec(TaikoSpecId::SHASTA);
+
+        let ontake_addrs: Vec<_> = ontake_precompiles.precompiles().addresses().collect();
+        let pacaya_addrs: Vec<_> = pacaya_precompiles.precompiles().addresses().collect();
+        let shasta_addrs: Vec<_> = shasta_precompiles.precompiles().addresses().collect();
+
+        // L1SLOAD should only be in Pacaya and Shasta
+        assert!(!ontake_addrs.contains(&&l1sload_addr), "Ontake should not contain L1SLOAD");
+        assert!(pacaya_addrs.contains(&&l1sload_addr), "Pacaya should contain L1SLOAD");
+        assert!(shasta_addrs.contains(&&l1sload_addr), "Shasta should contain L1SLOAD");
+
+        // Verify counts are correct
+        assert_eq!(
+            pacaya_addrs.len(),
+            ontake_addrs.len() + 1,
+            "Pacaya should have one more precompile than Ontake"
+        );
+        assert_eq!(
+            shasta_addrs.len(),
+            pacaya_addrs.len(),
+            "Shasta should have same number as Pacaya"
+        );
+
+        // Test that the L1SLOAD precompile from l1sload module is accessible
+        assert_eq!(
+            crate::evm::precompiles::l1sload::L1SLOAD.0,
+            l1sload_addr,
+            "L1SLOAD constant should have correct address"
+        );
     }
 }
