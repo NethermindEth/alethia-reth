@@ -63,16 +63,20 @@ fn get_l1_storage_value(
 ///
 /// Output: Storage value (32 bytes)
 pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
+    tracing::error!("L1SLOAD precompile called with input: {:x?}, gas_limit: {}", input, gas_limit);
     // Check gas limit
     let gas_used = L1SLOAD_FIXED_GAS + L1SLOAD_PER_LOAD_GAS;
     if gas_used > gas_limit {
         return Err(PrecompileError::OutOfGas);
     }
+    tracing::error!("\t L1SLOAD before Validate input length");
 
     // Validate input length
     if input.len() != EXPECTED_INPUT_LENGTH {
         return Err(PrecompileError::Other("Invalid input length".into()));
     }
+
+    tracing::error!("\t L1SLOAD before Parsing");
 
     // Parse input parameters
     let contract_address = Address::from_slice(&input[0..20]);
@@ -80,6 +84,7 @@ pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
     let block_number = B256::from_slice(&input[52..84]);
 
     // Get cached L1 storage value
+    tracing::error!("\t L1SLOAD before Getting cached L1 storage value");
     let storage_value = get_l1_storage_value(contract_address, storage_key, block_number);
 
     match storage_value {
@@ -87,10 +92,16 @@ pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
             // Convert storage value to output bytes (32 bytes)
             let mut output = [0u8; 32];
             output.copy_from_slice(value.as_slice());
+            tracing::error!(
+                "\t L1SLOAD done, returning value and gas: {:x?}, {:?}",
+                output,
+                gas_used
+            );
             Ok(PrecompileOutput::new(gas_used, Bytes::from(output)))
         }
         None => {
             // Return error if no cached data found
+            tracing::error!("\t L1SLOAD ERROR");
             Err(PrecompileError::Other("L1 storage value not found in cache".into()))
         }
     }

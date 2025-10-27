@@ -29,6 +29,8 @@ impl TaikoPrecompiles {
     /// Create a new precompile provider with the given TaikoSpecId.
     #[inline]
     pub fn new_with_spec(spec: TaikoSpecId) -> Self {
+        tracing::error!("Creating TaikoPrecompiles with spec: {:?}", spec);
+
         let precompiles = match spec {
             TaikoSpecId::GENESIS => Precompiles::new(spec.into_eth_spec().into()),
             TaikoSpecId::ONTAKE => ontake(),
@@ -61,6 +63,10 @@ pub fn pacaya() -> &'static Precompiles {
     INSTANCE.get_or_init(|| {
         let mut precompiles = ontake().clone();
         precompiles.extend([l1sload::L1SLOAD]);
+        tracing::error!(
+            "Pacaya precompiles initialized with L1SLOAD: {:?}",
+            precompiles.addresses().collect::<Vec<_>>()
+        );
         precompiles
     })
 }
