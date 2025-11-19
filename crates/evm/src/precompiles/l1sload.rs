@@ -29,7 +29,8 @@ static L1_STORAGE_CACHE: LazyLock<Mutex<HashMap<(Address, B256), B256>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Current anchor block ID context for L1SLOAD operations
-/// This is set before block execution and used by the precompile to determine which L1 block to query
+/// This is set before block execution and used by the precompile to determine which L1 block
+/// to query
 static CURRENT_ANCHOR_BLOCK_ID: LazyLock<Mutex<Option<B256>>> = LazyLock::new(|| Mutex::new(None));
 
 /// Set the current anchor block ID context
