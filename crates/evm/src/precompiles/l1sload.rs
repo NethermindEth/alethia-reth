@@ -19,22 +19,17 @@ pub const L1SLOAD_FIXED_GAS: u64 = 2000;
 pub const L1SLOAD_PER_LOAD_GAS: u64 = 2000;
 
 /// Expected input length: 20 bytes (address) + 32 bytes (storage key) = 52 bytes
-/// Note: Block number is no longer part of input; it's obtained from the anchor block context
 pub const EXPECTED_INPUT_LENGTH: usize = 52;
 
 /// In-memory cache for L1 storage values
 /// Key: (contract_address, storage_key) -> Value: storage_value
-/// The anchor block context is managed separately via CURRENT_ANCHOR_BLOCK_ID
 static L1_STORAGE_CACHE: LazyLock<Mutex<HashMap<(Address, B256), B256>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Current anchor block ID context for L1SLOAD operations
-/// This is set before block execution and used by the precompile to determine which L1 block
-/// to query
 static CURRENT_ANCHOR_BLOCK_ID: LazyLock<Mutex<Option<B256>>> = LazyLock::new(|| Mutex::new(None));
 
 /// Set the current anchor block ID context
-/// This must be called before executing any block that uses L1SLOAD
 pub fn set_anchor_block_id(anchor_block_id: B256) {
     if let Ok(mut ctx) = CURRENT_ANCHOR_BLOCK_ID.lock() {
         *ctx = Some(anchor_block_id);
@@ -69,7 +64,6 @@ pub fn clear_l1_storage() {
 }
 
 /// Get a value from the L1 storage cache
-/// Uses the current anchor block ID context
 fn get_l1_storage_value(contract_address: Address, storage_key: B256) -> Option<B256> {
     if let Ok(cache) = L1_STORAGE_CACHE.lock() {
         cache.get(&(contract_address, storage_key)).copied()
@@ -105,8 +99,9 @@ pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
     let storage_key = B256::from_slice(&input[20..52]);
 
     // Verify anchor block ID is set
-    get_anchor_block_id()
-        .ok_or_else(|| PrecompileError::Other("Anchor block ID not set".into()))?;
+    if get_anchor_block_id().is_none() {
+        return Err(PrecompileError::Other("Anchor block ID not set".into()));
+    }
 
     // Get cached L1 storage value
     let storage_value = get_l1_storage_value(contract_address, storage_key);
