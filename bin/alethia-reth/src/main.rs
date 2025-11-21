@@ -7,7 +7,6 @@ use alethia_reth_node::{
         eth::{TaikoExt, TaikoExtApiServer},
     },
 };
-use reth::{builder::NodeHandle, ress::install_ress_subprotocol};
 use reth_rpc::eth::{EthApiTypes, RpcNodeCore};
 use tracing::info;
 
@@ -24,7 +23,7 @@ fn main() {
         async move |builder, ext_args| {
             let TaikoCliExtArgs { ress, .. } = ext_args;
             info!(target: "reth::taiko::cli", "Launching Taiko node");
-            let NodeHandle { node, node_exit_future } = builder
+            let handle = builder
                 .node(TaikoNode)
                 .extend_rpc_modules(move |ctx| {
                     let provider = ctx.node().provider().clone();
@@ -49,17 +48,18 @@ fn main() {
 
             // Install ress subprotocol.
             if ress.enabled {
-                install_ress_subprotocol(
-                    ress,
-                    node.provider,
-                    node.evm_config,
-                    node.network,
-                    node.task_executor,
-                    node.add_ons_handle.engine_events.new_listener(),
-                )?;
+                unimplemented!("RESS subprotocol is not supported with TaikoPrimitives.");
+                // install_ress_subprotocol(
+                //     ress,
+                //     node.provider,
+                //     node.evm_config,
+                //     node.network,
+                //     node.task_executor,
+                //     node.add_ons_handle.engine_events.new_listener(),
+                // )?;
             }
 
-            node_exit_future.await
+            handle.node_exit_future.await
         },
     ) {
         eprintln!("Error: {err:?}");

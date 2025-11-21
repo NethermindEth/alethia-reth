@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use alethia_reth_chainspec::spec::TaikoChainSpec;
 use alethia_reth_consensus::validation::TaikoBeaconConsensus;
-use alethia_reth_primitives::engine::TaikoEngineTypes;
-use reth_ethereum::EthPrimitives;
+use alethia_reth_primitives::{TaikoPrimitives, engine::TaikoEngineTypes};
 use reth_node_api::{FullNodeTypes, NodeTypes};
 use reth_node_builder::{BuilderContext, components::ConsensusBuilder};
 
@@ -16,7 +15,7 @@ impl<Node> ConsensusBuilder<Node> for TaikoConsensusBuilder
 where
     Node: FullNodeTypes<
         Types: NodeTypes<
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             ChainSpec = TaikoChainSpec,
             Payload = TaikoEngineTypes,
         >,

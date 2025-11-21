@@ -8,8 +8,7 @@ use reth_rpc::EngineApi;
 use reth_rpc_engine_api::EngineCapabilities;
 
 use alethia_reth_chainspec::spec::TaikoChainSpec;
-use alethia_reth_primitives::engine::TaikoEngineTypes;
-use reth_ethereum::EthPrimitives;
+use alethia_reth_primitives::{TaikoPrimitives, engine::TaikoEngineTypes};
 
 use crate::engine::api::TaikoEngineApi;
 
@@ -27,7 +26,7 @@ impl<N, PVB> EngineApiBuilder<N> for TaikoEngineApiBuilder<PVB>
 where
     N: FullNodeComponents,
     N::Types: NodeTypes<
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             ChainSpec = TaikoChainSpec,
             Payload = TaikoEngineTypes,
         >,

@@ -1,6 +1,7 @@
-use alethia_reth_block::config::TaikoEvmConfig;
+use alethia_reth_block::{TaikoBlock, config::TaikoEvmConfig};
 use alethia_reth_chainspec::spec::TaikoChainSpec;
 use alethia_reth_primitives::{
+    TaikoPrimitives,
     engine::{TaikoEngineTypes, types::TaikoExecutionData},
     payload::attributes::TaikoPayloadAttributes,
 };
@@ -9,7 +10,6 @@ use alloy_rpc_types_engine::{ExecutionPayloadV1, PayloadError};
 use reth_chainspec::EthChainSpec;
 use reth_engine_primitives::EngineApiValidator;
 use reth_engine_tree::tree::{TreeConfig, payload_validator::BasicEngineValidator};
-use reth_ethereum::{Block, EthPrimitives};
 use reth_evm::ConfigureEngineEvm;
 use reth_node_api::{
     AddOnsContext, FullNodeComponents, NewPayloadError, NodeTypes, PayloadTypes, PayloadValidator,
@@ -35,7 +35,7 @@ impl<N> PayloadValidatorBuilder<N> for TaikoEngineValidatorBuilder
 where
     N: FullNodeComponents<Evm = TaikoEvmConfig>,
     N::Types: NodeTypes<
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             ChainSpec = TaikoChainSpec,
             Payload = TaikoEngineTypes,
         >,
@@ -53,7 +53,7 @@ impl<N> EngineValidatorBuilder<N> for TaikoEngineValidatorBuilder
 where
     N: FullNodeComponents<Evm = TaikoEvmConfig>,
     N::Types: NodeTypes<
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             ChainSpec = TaikoChainSpec,
             Payload = TaikoEngineTypes,
         >,
@@ -100,7 +100,7 @@ where
     Types: PayloadTypes<ExecutionData = TaikoExecutionData>,
 {
     /// The block type used by the engine.
-    type Block = Block;
+    type Block = TaikoBlock;
 
     /// Ensures that the given payload does not violate any consensus rules that concern the block's
     /// layout.

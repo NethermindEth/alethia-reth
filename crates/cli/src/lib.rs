@@ -10,14 +10,15 @@ use reth_db::DatabaseEnv;
 use reth_ethereum_cli::{Cli, interface::Commands};
 use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_ethereum_forks::Hardforks;
-use reth_evm_ethereum::EthEvmConfig;
 use reth_node_api::{NodePrimitives, NodeTypes};
 use reth_node_builder::{NodeBuilder, WithLaunchContext};
 use reth_node_metrics::recorder::install_prometheus_recorder;
 use reth_tracing::FileWorkerGuard;
 use tracing::info;
 
-use alethia_reth_node::{TaikoNode, chainspec::spec::TaikoChainSpec};
+use alethia_reth_node::{
+    TaikoNode, block::config::TaikoEvmConfig, chainspec::spec::TaikoChainSpec,
+};
 
 use crate::{
     chainspec::TaikoChainSpecParser,
@@ -133,7 +134,7 @@ impl<
         let _ = install_prometheus_recorder();
 
         let components = |spec: Arc<C::ChainSpec>| {
-            (EthEvmConfig::ethereum(spec.clone()), EthBeaconConsensus::new(spec))
+            (TaikoEvmConfig::new(spec.clone()), EthBeaconConsensus::new(spec))
         };
         match self.inner.command {
             // NOTE: We use the custom `TaikoNodeCommand` to handle the node commands, to initialize

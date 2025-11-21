@@ -1,20 +1,22 @@
 pub use alethia_reth_block as block;
 pub use alethia_reth_chainspec as chainspec;
 pub use alethia_reth_consensus as consensus;
+use alethia_reth_consensus::transaction::TaikoTxEnvelope;
 pub use alethia_reth_db as db;
 pub use alethia_reth_evm as evm;
 pub use alethia_reth_payload as payload;
 pub use alethia_reth_primitives as primitives;
+use alethia_reth_primitives::{TaikoBlock, TaikoPrimitives};
 pub use alethia_reth_rpc as rpc;
 
 pub mod builder;
+pub mod txpool;
 
 use block::config::TaikoEvmConfig;
 use chainspec::spec::TaikoChainSpec;
 use primitives::engine::TaikoEngineTypes;
 use reth_engine_local::LocalPayloadAttributesBuilder;
 use reth_engine_primitives::{EngineApiValidator, PayloadValidator};
-use reth_ethereum::EthPrimitives;
 use reth_node_api::{
     BlockTy, FullNodeComponents, FullNodeTypes, NodeAddOns, NodeTypes, PayloadAttributesBuilder,
     PayloadTypes,
@@ -27,10 +29,9 @@ use reth_node_builder::{
         RpcAddOns, RpcHandle, RpcHooks,
     },
 };
-use reth_node_ethereum::node::EthereumPoolBuilder;
-use reth_rpc::eth::core::EthRpcConverterFor;
-use reth_storage_api::EthStorage;
+use reth_provider::EthStorage;
 use rpc::{
+    converter::TaikoRpcConverter,
     engine::{builder::TaikoEngineApiBuilder, validator::TaikoEngineValidatorBuilder},
     eth::types::TaikoEthApi,
 };
@@ -38,8 +39,14 @@ use std::sync::Arc;
 
 use crate::builder::{
     TaikoConsensusBuilder, TaikoEthApiBuilder, TaikoExecutorBuilder, TaikoNetworkBuilder,
-    TaikoPayloadBuilderBuilder,
+    TaikoPayloadBuilderBuilder, TaikoPoolBuilder,
 };
+
+/// Taiko storage type.
+/// Since TaikoTxEnvelope implements Compact (for RLP encoding), we can reuse EthStorage
+/// with our custom transaction and header types.
+pub type TaikoStorage =
+    EthStorage<consensus::transaction::TaikoTxEnvelope, alloy_consensus::Header>;
 
 /// The main node type for a Taiko network node, implementing the `NodeTypes` trait.
 #[derive(Debug, Clone, Default)]
@@ -47,11 +54,11 @@ pub struct TaikoNode;
 
 impl NodeTypes for TaikoNode {
     /// The node's primitive types, defining basic operations and structures.
-    type Primitives = EthPrimitives;
+    type Primitives = TaikoPrimitives;
     /// The type used for configuration of the EVM.
     type ChainSpec = TaikoChainSpec;
     /// The type responsible for writing chain primitives to storage.
-    type Storage = EthStorage;
+    type Storage = TaikoStorage;
     /// The node's engine types, defining the interaction with the consensus engine.
     type Payload = TaikoEngineTypes;
 }
@@ -69,7 +76,7 @@ where
     /// Creates a new instance of `TaikoAddOns` with default configurations.
     fn default() -> Self {
         let add_ons = RpcAddOns::new(
-            TaikoEthApiBuilder::default(),
+            TaikoEthApiBuilder,
             PVB::default(),
             TaikoEngineApiBuilder::default(),
             Default::default(),
@@ -88,7 +95,7 @@ where
         + EngineApiValidator<<N::Types as NodeTypes>::Payload>,
 {
     /// Handle to add-ons.
-    type Handle = RpcHandle<N, TaikoEthApi<N, EthRpcConverterFor<N>>>;
+    type Handle = RpcHandle<N, TaikoEthApi<N, TaikoRpcConverter<<N as FullNodeComponents>::Evm>>>;
 
     /// Configures and launches the add-ons.
     async fn launch_add_ons(
@@ -107,7 +114,7 @@ where
         + EngineApiValidator<<N::Types as NodeTypes>::Payload>,
 {
     /// eth API implementation.
-    type EthApi = TaikoEthApi<N, EthRpcConverterFor<N>>;
+    type EthApi = TaikoEthApi<N, TaikoRpcConverter<<N as FullNodeComponents>::Evm>>;
 
     /// Returns a mutable reference to RPC hooks.
     fn hooks_mut(&mut self) -> &mut RpcHooks<N, Self::EthApi> {
@@ -138,7 +145,7 @@ where
     /// The type that builds the node's components.
     type ComponentsBuilder = ComponentsBuilder<
         N,
-        EthereumPoolBuilder,
+        TaikoPoolBuilder,
         BasicPayloadServiceBuilder<TaikoPayloadBuilderBuilder>,
         TaikoNetworkBuilder,
         TaikoExecutorBuilder,
@@ -152,7 +159,7 @@ where
     fn components_builder(&self) -> Self::ComponentsBuilder {
         ComponentsBuilder::default()
             .node_types()
-            .pool(EthereumPoolBuilder::default())
+            .pool(TaikoPoolBuilder::default())
             .executor(TaikoExecutorBuilder::default())
             .payload(BasicPayloadServiceBuilder::new(TaikoPayloadBuilderBuilder))
             .network(TaikoNetworkBuilder)
@@ -168,11 +175,11 @@ where
 impl<N: FullNodeComponents<Types = Self>> DebugNode<N> for TaikoNode {
     /// RPC block type. Used by [`DebugConsensusClient`] to fetch blocks and submit them to the
     /// engine.
-    type RpcBlock = alloy_rpc_types_eth::Block;
+    type RpcBlock = alloy_rpc_types_eth::Block<TaikoTxEnvelope>;
 
     /// Converts an RPC block to a primitive block.
-    fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> reth_ethereum_primitives::Block {
-        rpc_block.into_consensus().convert_transactions()
+    fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> TaikoBlock {
+        rpc_block.into_consensus()
     }
 
     /// Creates a payload attributes builder for local mining in dev mode.

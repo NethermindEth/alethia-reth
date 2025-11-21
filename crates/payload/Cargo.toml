@@ -15,10 +15,14 @@ default = []
 alethia-reth-block = { path = "../block" }
 alethia-reth-chainspec = { path = "../chainspec" }
 alethia-reth-evm = { path = "../evm" }
-alethia-reth-primitives = { path = "../primitives", features = ["serde"] }
+alethia-reth-primitives = { path = "../primitives", features = [
+    "serde",
+    "reth-codec",
+] }
 alloy-consensus = { workspace = true }
 alloy-hardforks = { workspace = true }
 alloy-primitives = { workspace = true }
+alloy-rpc-types-engine = { workspace = true }
 eyre = { workspace = true }
 reth-revm = { workspace = true }
 reth-provider = { workspace = true }

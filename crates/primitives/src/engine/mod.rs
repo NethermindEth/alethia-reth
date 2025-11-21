@@ -3,13 +3,15 @@ use alloy_rpc_types_engine::{
     ExecutionPayloadEnvelopeV5, ExecutionPayloadV1,
 };
 use reth_engine_primitives::EngineTypes;
-use reth_ethereum_engine_primitives::EthBuiltPayload;
 use reth_payload_primitives::{BuiltPayload, PayloadTypes};
 use reth_primitives::SealedBlock;
 use reth_primitives_traits::NodePrimitives;
 
 use self::types::{TaikoExecutionData, TaikoExecutionDataSidecar};
-use crate::payload::{attributes::TaikoPayloadAttributes, builder::TaikoPayloadBuilderAttributes};
+use crate::payload::{
+    attributes::TaikoPayloadAttributes, builder::TaikoPayloadBuilderAttributes,
+    built_payload::TaikoBuiltPayload,
+};
 
 pub mod types;
 
@@ -22,7 +24,7 @@ impl PayloadTypes for TaikoEngineTypes {
     /// The execution payload type provided as input.
     type ExecutionData = TaikoExecutionData;
     /// The built payload type.
-    type BuiltPayload = EthBuiltPayload;
+    type BuiltPayload = TaikoBuiltPayload;
     /// The RPC payload attributes type the CL node emits via the engine API.
     type PayloadAttributes = TaikoPayloadAttributes;
     /// The payload attributes type that contains information about a running payload job.

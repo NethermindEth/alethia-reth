@@ -6,12 +6,11 @@ use reth_revm::primitives::B256;
 
 /// Represents the execution data for the Taiko network, which includes the execution payload and a
 /// sidecar.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TaikoExecutionData {
-    #[cfg_attr(feature = "serde", serde(flatten))]
+    #[serde(flatten)]
     pub execution_payload: TaikoExecutionPayloadV1,
-    #[cfg_attr(feature = "serde", serde(flatten))]
+    #[serde(flatten)]
     pub taiko_sidecar: TaikoExecutionDataSidecar,
 }
 
@@ -30,9 +29,8 @@ impl From<TaikoExecutionData> for ExecutionPayload {
 
 /// Represents the sidecar data for the Taiko execution payload, which includes the transaction
 /// hash, optional withdrawals hash, and a boolean indicating if the block is a Taiko block.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaikoExecutionDataSidecar {
     pub tx_hash: B256,
     pub withdrawals_hash: Option<B256>,
@@ -81,9 +79,8 @@ impl ExecutionPayloadTr for TaikoExecutionData {
 /// See also: <https://github.com/ethereum/execution-apis/blob/6709c2a795b707202e93c4f2867fa0bf2640a84f/src/engine/paris.md#executionpayloadv1>
 /// NOTE: we change `transactions` to `Option<Vec<Bytes>>` to ensure backward compatibility with the
 /// taiko-client driver behavior.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaikoExecutionPayloadV1 {
     /// The parent hash of the block.
     pub parent_hash: B256,
@@ -98,16 +95,16 @@ pub struct TaikoExecutionPayloadV1 {
     /// The previous randao of the block.
     pub prev_randao: B256,
     /// The block number.
-    #[cfg_attr(feature = "serde", serde(with = "alloy_serde::quantity"))]
+    #[serde(with = "alloy_serde::quantity")]
     pub block_number: u64,
     /// The gas limit of the block.
-    #[cfg_attr(feature = "serde", serde(with = "alloy_serde::quantity"))]
+    #[serde(with = "alloy_serde::quantity")]
     pub gas_limit: u64,
     /// The gas used of the block.
-    #[cfg_attr(feature = "serde", serde(with = "alloy_serde::quantity"))]
+    #[serde(with = "alloy_serde::quantity")]
     pub gas_used: u64,
     /// The timestamp of the block.
-    #[cfg_attr(feature = "serde", serde(with = "alloy_serde::quantity"))]
+    #[serde(with = "alloy_serde::quantity")]
     pub timestamp: u64,
     /// The extra data of the block.
     pub extra_data: Bytes,

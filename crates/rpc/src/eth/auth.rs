@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 use std::{convert::Infallible, sync::Arc};
 
+use alethia_reth_consensus::transaction::TaikoTxEnvelope;
 use alloy_consensus::BlockHeader;
 use alloy_eips::{BlockId, BlockNumberOrTag, Encodable2718};
 use alloy_json_rpc::RpcObject;
@@ -10,13 +11,11 @@ use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use op_alloy_flz::tx_estimated_size_fjord_bytes;
 use reth_db::transaction::DbTx;
 use reth_db_api::transaction::DbTxMut;
-use reth_ethereum::{EthPrimitives, TransactionSigned};
 use reth_evm::{
     ConfigureEngineEvm,
     block::{BlockExecutionError, BlockValidationError},
     execute::BlockBuilder,
 };
-use reth_evm_ethereum::RethReceiptBuilder;
 use reth_node_api::{Block, NodePrimitives};
 use reth_primitives_traits::transaction::error::InvalidTransactionError;
 use reth_provider::{BlockReaderIdExt, DBProvider, DatabaseProviderFactory, StateProviderFactory};
@@ -33,7 +32,7 @@ use tracing::{info, trace};
 use crate::eth::error::TaikoApiError;
 use alethia_reth_block::{
     assembler::TaikoBlockAssembler, config::TaikoNextBlockEnvAttributes,
-    factory::TaikoBlockExecutorFactory,
+    factory::TaikoBlockExecutorFactory, receipt_builder::TaikoReceiptBuilder,
 };
 use alethia_reth_chainspec::spec::TaikoChainSpec;
 use alethia_reth_db::model::{
@@ -41,7 +40,7 @@ use alethia_reth_db::model::{
 };
 use alethia_reth_evm::factory::TaikoEvmFactory;
 use alethia_reth_primitives::{
-    engine::types::TaikoExecutionData, payload::attributes::RpcL1Origin,
+    TaikoPrimitives, engine::types::TaikoExecutionData, payload::attributes::RpcL1Origin,
 };
 
 /// A pre-built transaction list that contains the mempool content.
@@ -117,7 +116,7 @@ impl<Pool, Eth, Evm, Provider: DatabaseProviderFactory> TaikoAuthExt<Pool, Eth, 
 impl<Pool, Eth, Evm, Provider> TaikoAuthExtApiServer<RpcTransaction<Eth::Network>>
     for TaikoAuthExt<Pool, Eth, Evm, Provider>
 where
-    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TransactionSigned>> + 'static,
+    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TaikoTxEnvelope>> + 'static,
     Eth: RpcConvert<Primitives: NodePrimitives<SignedTx = PoolConsensusTx<Pool>>> + 'static,
     Provider: DatabaseProviderFactory
         + BlockReaderIdExt<Header = alloy_consensus::Header>
@@ -125,11 +124,11 @@ where
         + 'static,
     Evm: ConfigureEngineEvm<
             TaikoExecutionData,
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             Error = Infallible,
             NextBlockEnvCtx = TaikoNextBlockEnvAttributes,
             BlockExecutorFactory = TaikoBlockExecutorFactory<
-                RethReceiptBuilder,
+                TaikoReceiptBuilder,
                 Arc<TaikoChainSpec>,
                 TaikoEvmFactory,
             >,

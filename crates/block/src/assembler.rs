@@ -6,13 +6,14 @@ use alloy_consensus::{
 use alloy_eips::merge::BEACON_NONCE;
 use alloy_primitives::logs_bloom;
 use alloy_rpc_types_eth::Withdrawals;
-use reth_ethereum::{Receipt, TransactionSigned};
+use reth_ethereum::Receipt;
 use reth_evm::{
     block::{BlockExecutionError, BlockExecutionResult, BlockExecutorFactory},
     execute::{BlockAssembler, BlockAssemblerInput},
 };
 use reth_evm_ethereum::EthBlockAssembler;
 use reth_primitives::Block;
+use reth_primitives_traits::SignedTransaction;
 
 use crate::factory::TaikoBlockExecutionCtx;
 use alethia_reth_chainspec::spec::TaikoChainSpec;
@@ -39,12 +40,12 @@ impl<F> BlockAssembler<F> for TaikoBlockAssembler
 where
     F: for<'a> BlockExecutorFactory<
             ExecutionCtx<'a> = TaikoBlockExecutionCtx<'a>,
-            Transaction = TransactionSigned,
+            Transaction: SignedTransaction,
             Receipt = Receipt,
         >,
 {
     /// The block type produced by the assembler.
-    type Block = Block;
+    type Block = Block<F::Transaction>;
 
     /// Builds a Taiko network block.
     fn assemble_block(

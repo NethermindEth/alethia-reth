@@ -12,20 +12,25 @@ path = "src/lib.rs"
 default = []
 local-payload-builder = ["dep:reth-engine-local"]
 serde = [
-    "dep:serde",
     "alloy-primitives/serde",
     "alloy-rpc-types-engine/serde",
     "alloy-rpc-types-eth/serde",
 ]
+reth-codec = ["alethia-reth-consensus/reth-codec"]
+serde-bincode-compat = ["alethia-reth-consensus/serde-bincode-compat"]
 
 [dependencies]
 alethia-reth-chainspec = { path = "../chainspec" }
+alethia-reth-consensus = { path = "../consensus", features = ["k256", "serde"] }
 alloy-primitives = { workspace = true }
+alloy-consensus = { workspace = true }
 alloy-rlp = { workspace = true }
+alloy-eips = { workspace = true }
 alloy-rpc-types-engine = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-serde = { workspace = true }
 reth-revm = { workspace = true }
+reth-chain-state = { workspace = true }
 reth-engine-local = { workspace = true, optional = true }
 reth-ethereum = { workspace = true }
 reth-ethereum-engine-primitives = { workspace = true }
@@ -33,7 +38,14 @@ reth-payload-primitives = { workspace = true }
 reth-engine-primitives = { workspace = true }
 reth-primitives-traits = { workspace = true }
 reth-primitives = { workspace = true }
-serde = { workspace = true, optional = true }
+serde = { workspace = true }
 serde_with = { workspace = true }
 sha2 = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+alethia-reth-consensus = { path = "../consensus", features = [
+    "k256",
+    "serde",
+    "reth-codec",
+] }

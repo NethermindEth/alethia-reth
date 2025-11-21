@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use alethia_reth_primitives::{
-    engine::types::TaikoExecutionData, payload::attributes::TaikoPayloadAttributes,
+    engine::types::TaikoExecutionData,
+    payload::{attributes::TaikoPayloadAttributes, built_payload::TaikoBuiltPayload},
 };
 use alloy_hardforks::EthereumHardforks;
 use alloy_primitives::BlockNumber;
@@ -13,7 +14,6 @@ use jsonrpsee_types::ErrorCode;
 use reth_db::transaction::DbTx;
 use reth_db_api::transaction::DbTxMut;
 use reth_engine_primitives::EngineApiValidator;
-use reth_ethereum_engine_primitives::EthBuiltPayload;
 use reth_node_api::{EngineTypes, PayloadBuilderError, PayloadTypes};
 use reth_payload_builder::PayloadStore;
 use reth_provider::{
@@ -96,7 +96,7 @@ where
     EngineT: EngineTypes<
             ExecutionData = TaikoExecutionData,
             PayloadAttributes = TaikoPayloadAttributes,
-            BuiltPayload = EthBuiltPayload,
+            BuiltPayload = TaikoBuiltPayload,
         >,
     Pool: TransactionPool + 'static,
     Validator: EngineApiValidator<EngineT>,

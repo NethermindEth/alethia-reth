@@ -329,7 +329,9 @@ where
     ///
     /// Returns the hash of the transaction.
     async fn send_raw_transaction(&self, tx: Bytes) -> Result<B256, Self::Error> {
-        let recovered = recover_raw_transaction(&tx)?;
+        let recovered: reth_primitives::Recovered<
+            <<<N as RpcNodeCore>::Pool as TransactionPool>::Transaction as PoolTransaction>::Pooled,
+        > = recover_raw_transaction(&tx)?;
 
         // broadcast raw transaction to subscribers if there is any.
         self.0.broadcast_raw_transaction(tx);

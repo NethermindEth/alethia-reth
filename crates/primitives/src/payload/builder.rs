@@ -1,8 +1,8 @@
+use alethia_reth_consensus::transaction::TaikoTxEnvelope;
 use alloy_primitives::Bytes;
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rpc_types_engine::PayloadId;
 use alloy_rpc_types_eth::Withdrawals;
-use reth_ethereum::TransactionSigned;
 use reth_ethereum_engine_primitives::EthPayloadBuilderAttributes;
 use reth_payload_primitives::PayloadBuilderAttributes;
 use reth_primitives::Recovered;
@@ -32,7 +32,7 @@ pub struct TaikoPayloadBuilderAttributes {
     // The basefee for the L2 block.
     pub base_fee_per_gas: u64,
     // The transactions inside the L2 block.
-    pub transactions: Vec<Recovered<TransactionSigned>>,
+    pub transactions: Vec<Recovered<TaikoTxEnvelope>>,
     // The extra data for the L2 block.
     pub extra_data: Bytes,
 }
@@ -165,12 +165,12 @@ pub(crate) fn payload_id_taiko(
 
     let mut out = hasher.finalize();
     out[0] = payload_version;
-    PayloadId::new(out.as_slice()[..8].try_into().expect("sufficient length"))
+    PayloadId::new(out[..8].try_into().expect("sufficient length"))
 }
 
 // Decodes the given RLP-encoded bytes into transactions.
-fn decode_transactions(bytes: &[u8]) -> Result<Vec<TransactionSigned>, alloy_rlp::Error> {
-    Vec::<TransactionSigned>::decode(&mut &bytes[..])
+fn decode_transactions(bytes: &[u8]) -> Result<Vec<TaikoTxEnvelope>, alloy_rlp::Error> {
+    Vec::<TaikoTxEnvelope>::decode(&mut &bytes[..])
 }
 
 #[cfg(test)]

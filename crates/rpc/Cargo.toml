@@ -19,11 +19,16 @@ alethia-reth-chainspec = { path = "../chainspec" }
 alethia-reth-consensus = { path = "../consensus" }
 alethia-reth-db = { path = "../db" }
 alethia-reth-evm = { path = "../evm" }
-alethia-reth-primitives = { path = "../primitives", features = ["serde"] }
+alethia-reth-primitives = { path = "../primitives", features = [
+    "serde",
+    "reth-codec",
+    "serde-bincode-compat",
+] }
 alloy-consensus = { workspace = true }
 alloy-eips = { workspace = true }
 alloy-hardforks = { workspace = true }
 alloy-json-rpc = { workspace = true }
+alloy-network = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-rpc-types-engine = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
@@ -57,6 +62,7 @@ reth-provider = { workspace = true }
 reth-revm = { workspace = true }
 reth-rpc = { workspace = true }
 reth-rpc-api = { workspace = true }
+reth-rpc-convert = { workspace = true }
 reth-rpc-engine-api = { workspace = true }
 reth-rpc-eth-api = { workspace = true }
 reth-rpc-eth-types = { workspace = true }

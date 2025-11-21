@@ -10,10 +10,9 @@ use alloy_evm::{
 use alloy_primitives::{B256, Bytes, Log};
 use alloy_rpc_types_eth::Withdrawals;
 
-use reth_evm_ethereum::RethReceiptBuilder;
 use reth_revm::{Inspector, State};
 
-use crate::executor::TaikoBlockExecutor;
+use crate::{executor::TaikoBlockExecutor, receipt_builder::TaikoReceiptBuilder};
 use alethia_reth_chainspec::spec::{TaikoChainSpec, TaikoExecutorSpec};
 use alethia_reth_evm::factory::TaikoEvmFactory;
 
@@ -37,7 +36,7 @@ pub struct TaikoBlockExecutionCtx<'a> {
 /// Taiko block executor factory.
 #[derive(Debug, Clone, Default)]
 pub struct TaikoBlockExecutorFactory<
-    R = RethReceiptBuilder,
+    R = TaikoReceiptBuilder,
     Spec = Arc<TaikoChainSpec>,
     EvmFactory = TaikoEvmFactory,
 > {
@@ -126,12 +125,11 @@ where
 mod tests {
     use super::*;
     use alethia_reth_evm::factory::TaikoEvmFactory;
-    use reth_evm_ethereum::RethReceiptBuilder;
     use std::sync::Arc;
 
     #[test]
     fn test_taiko_block_executor_factory_creation() {
-        let receipt_builder = RethReceiptBuilder::default();
+        let receipt_builder = TaikoReceiptBuilder::default();
         let spec = Arc::new(TaikoChainSpec::default());
         let evm_factory = TaikoEvmFactory::default();
 

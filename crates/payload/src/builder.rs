@@ -3,14 +3,11 @@ use alloy_hardforks::EthereumHardforks;
 use reth_basic_payload_builder::{
     BuildArguments, BuildOutcome, MissingPayloadBehaviour, PayloadBuilder, PayloadConfig,
 };
-use reth_ethereum::EthPrimitives;
-use reth_ethereum_engine_primitives::EthBuiltPayload;
 use reth_evm::{
     ConfigureEvm,
     block::{BlockExecutionError, BlockValidationError},
     execute::{BlockBuilder, BlockBuilderOutcome},
 };
-use reth_evm_ethereum::RethReceiptBuilder;
 use reth_payload_primitives::{PayloadBuilderAttributes, PayloadBuilderError};
 use reth_provider::{ChainSpecProvider, StateProviderFactory};
 use reth_revm::{State, database::StateProviderDatabase, primitives::U256};
@@ -21,10 +18,14 @@ use alethia_reth_block::{
     assembler::TaikoBlockAssembler,
     config::{TaikoEvmConfig, TaikoNextBlockEnvAttributes},
     factory::TaikoBlockExecutorFactory,
+    receipt_builder::TaikoReceiptBuilder,
 };
 use alethia_reth_chainspec::spec::TaikoChainSpec;
 use alethia_reth_evm::factory::TaikoEvmFactory;
-use alethia_reth_primitives::payload::builder::TaikoPayloadBuilderAttributes;
+use alethia_reth_primitives::{
+    TaikoPrimitives,
+    payload::{builder::TaikoPayloadBuilderAttributes, built_payload::TaikoBuiltPayload},
+};
 
 /// Taiko payload builder
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,11 +47,11 @@ impl<Client, EvmConfig> TaikoPayloadBuilder<Client, EvmConfig> {
 impl<Client, EvmConfig> PayloadBuilder for TaikoPayloadBuilder<Client, EvmConfig>
 where
     EvmConfig: ConfigureEvm<
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             Error = Infallible,
             NextBlockEnvCtx = TaikoNextBlockEnvAttributes,
             BlockExecutorFactory = TaikoBlockExecutorFactory<
-                RethReceiptBuilder,
+                TaikoReceiptBuilder,
                 Arc<TaikoChainSpec>,
                 TaikoEvmFactory,
             >,
@@ -61,7 +62,7 @@ where
     /// The payload attributes type to accept for building.
     type Attributes = TaikoPayloadBuilderAttributes;
     /// /// The type of the built payload.
-    type BuiltPayload = EthBuiltPayload;
+    type BuiltPayload = TaikoBuiltPayload;
 
     /// Tries to build a transaction payload using provided arguments.
     ///
@@ -77,8 +78,8 @@ where
     /// A `Result` indicating the build outcome or an error.
     fn try_build(
         &self,
-        args: BuildArguments<TaikoPayloadBuilderAttributes, EthBuiltPayload>,
-    ) -> Result<BuildOutcome<EthBuiltPayload>, PayloadBuilderError> {
+        args: BuildArguments<TaikoPayloadBuilderAttributes, TaikoBuiltPayload>,
+    ) -> Result<BuildOutcome<TaikoBuiltPayload>, PayloadBuilderError> {
         taiko_payload(self.evm_config.clone(), self.client.clone(), args)
     }
 
@@ -96,7 +97,7 @@ where
     fn build_empty_payload(
         &self,
         _config: PayloadConfig<Self::Attributes>,
-    ) -> Result<EthBuiltPayload, PayloadBuilderError> {
+    ) -> Result<TaikoBuiltPayload, PayloadBuilderError> {
         Err(PayloadBuilderError::MissingPayload)
     }
 }
@@ -106,15 +107,15 @@ where
 fn taiko_payload<EvmConfig, Client>(
     evm_config: EvmConfig,
     client: Client,
-    args: BuildArguments<TaikoPayloadBuilderAttributes, EthBuiltPayload>,
-) -> Result<BuildOutcome<EthBuiltPayload>, PayloadBuilderError>
+    args: BuildArguments<TaikoPayloadBuilderAttributes, TaikoBuiltPayload>,
+) -> Result<BuildOutcome<TaikoBuiltPayload>, PayloadBuilderError>
 where
     EvmConfig: ConfigureEvm<
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             Error = Infallible,
             NextBlockEnvCtx = TaikoNextBlockEnvAttributes,
             BlockExecutorFactory = TaikoBlockExecutorFactory<
-                RethReceiptBuilder,
+                TaikoReceiptBuilder,
                 Arc<TaikoChainSpec>,
                 TaikoEvmFactory,
             >,
@@ -185,7 +186,7 @@ where
 
     let sealed_block = Arc::new(block.sealed_block().clone());
 
-    let payload = EthBuiltPayload::new(attributes.payload_id(), sealed_block, total_fees, None);
+    let payload = TaikoBuiltPayload::new(attributes.payload_id(), sealed_block, total_fees, None);
 
     Ok(BuildOutcome::Freeze(payload))
 }
