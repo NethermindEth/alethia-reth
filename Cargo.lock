@@ -181,6 +181,7 @@ dependencies = [
  "reth-consensus-common",
  "reth-db-api",
  "reth-ethereum-consensus",
+ "reth-ethereum-primitives",
  "reth-evm",
  "reth-primitives-traits",
  "reth-rpc-convert",

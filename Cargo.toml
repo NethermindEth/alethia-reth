@@ -80,10 +80,7 @@ reth-codecs = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0", def
 reth-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0", default-features = false }
 reth-consensus-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0", default-features = false }
 reth-storage-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0", default-features = false }
-reth-storage-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0", default-features = false, features = [
-    "std",
-    "db-api",
-] }
+reth-storage-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0", default-features = false }
 reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0", default-features = false }
 reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0", default-features = false }
 reth-engine-local = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0", default-features = false }

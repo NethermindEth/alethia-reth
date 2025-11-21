@@ -37,8 +37,9 @@ serde-bincode-compat = [
     "dep:serde_with",
     "alloy-consensus/serde-bincode-compat",
     "reth-primitives-traits/serde-bincode-compat",
+    "reth-ethereum-primitives/serde-bincode-compat",
 ]
-reth-codec = ["dep:reth-codecs"]
+reth-codec = ["dep:reth-codecs", "dep:reth-db-api"]
 
 [dependencies]
 alethia-reth-chainspec = { path = "../chainspec" }
@@ -59,8 +60,9 @@ reth-consensus = { workspace = true }
 reth-consensus-common = { workspace = true }
 reth-codecs = { workspace = true, features = ["alloy"], optional = true }
 reth-chainspec = { workspace = true }
-reth-db-api = { workspace = true }
+reth-db-api = { workspace = true, optional = true }
 reth-ethereum-consensus = { workspace = true }
+reth-ethereum-primitives = { workspace = true }
 reth-evm = { workspace = true }
 reth-primitives-traits = { workspace = true }
 reth-rpc-convert = { workspace = true, optional = true }

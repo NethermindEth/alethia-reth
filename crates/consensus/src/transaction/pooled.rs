@@ -253,6 +253,7 @@ impl<Tx> TryFrom<Extended<TaikoTxEnvelope, Tx>> for TaikoPooledTransaction {
     }
 }
 
+#[cfg(feature = "k256")]
 impl reth_primitives_traits::SignedTransaction for TaikoPooledTransaction {
     fn tx_hash(&self) -> &alloy_primitives::TxHash {
         self.hash()
