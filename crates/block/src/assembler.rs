@@ -6,6 +6,7 @@ use alloy_consensus::{
 use alloy_eips::merge::BEACON_NONCE;
 use alloy_primitives::logs_bloom;
 use alloy_rpc_types_eth::Withdrawals;
+use reth_chainspec::EthereumHardforks;
 use reth_ethereum::Receipt;
 use reth_evm::{
     block::{BlockExecutionError, BlockExecutionResult, BlockExecutorFactory},
@@ -62,7 +63,7 @@ where
             ..
         } = input;
 
-        let timestamp = evm_env.block_env.timestamp;
+        let timestamp = evm_env.block_env.timestamp.to();
 
         let transactions_root = proofs::calculate_transaction_root(&transactions);
         let receipts_root = Receipt::calculate_receipt_root_no_memo(receipts);
@@ -70,6 +71,13 @@ where
 
         let withdrawals = Some(Withdrawals::default());
         let withdrawals_root = Some(EMPTY_WITHDRAWALS);
+
+        let (excess_blob_gas, blob_gas_used) =
+            if self.chain_spec().is_cancun_active_at_timestamp(timestamp) {
+                (Some(0), Some(0))
+            } else {
+                (None, None)
+            };
 
         let header = Header {
             parent_hash: ctx.parent_hash,
@@ -80,7 +88,7 @@ where
             receipts_root,
             withdrawals_root,
             logs_bloom,
-            timestamp: timestamp.to(),
+            timestamp,
             mix_hash: evm_env.block_env.prevrandao.unwrap_or_default(),
             nonce: BEACON_NONCE.into(),
             base_fee_per_gas: Some(evm_env.block_env.basefee),
@@ -90,8 +98,8 @@ where
             gas_used: *gas_used,
             extra_data: ctx.extra_data,
             parent_beacon_block_root: ctx.parent_beacon_block_root,
-            blob_gas_used: None,
-            excess_blob_gas: None,
+            blob_gas_used,
+            excess_blob_gas,
             requests_hash: None,
         };
 

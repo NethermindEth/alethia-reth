@@ -217,7 +217,7 @@ impl EthPoolTransaction for TaikoPooledTransaction {
         _blob: &BlobTransactionSidecarVariant,
         _settings: &alloy_eips::eip4844::env_settings::KzgSettings,
     ) -> Result<(), BlobTransactionValidationError> {
-        // Taiko doesn't support blobs, so no validation needed
-        Ok(())
+        // Taiko doesn't support blobs
+        Err(BlobTransactionValidationError::NotBlobTransaction(self.ty()))
     }
 }

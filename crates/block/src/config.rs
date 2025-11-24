@@ -17,7 +17,8 @@ use reth_primitives::{BlockTy, SealedBlock, SealedHeader};
 use reth_primitives_traits::{SignedTransaction, TxTy, constants::MAX_TX_GAS_LIMIT_OSAKA};
 use reth_revm::{
     context::{BlockEnv, CfgEnv},
-    primitives::{Address, B256, U256},
+    context_interface::block::BlobExcessGasAndPrice,
+    primitives::{Address, B256, U256, hardfork::SpecId},
 };
 use reth_storage_errors::any::AnyError;
 
@@ -72,6 +73,9 @@ impl ConfigureEngineEvm<TaikoExecutionData> for TaikoEvmConfig {
         let timestamp = payload.timestamp();
         let block_number = payload.block_number();
 
+        let taiko_spec_id =
+            taiko_spec_by_timestamp_and_block_number(self.chain_spec(), timestamp, block_number);
+
         let blob_params = self.chain_spec().blob_params_at_timestamp(timestamp);
         let spec =
             taiko_spec_by_timestamp_and_block_number(self.chain_spec(), timestamp, block_number);
@@ -88,6 +92,11 @@ impl ConfigureEngineEvm<TaikoExecutionData> for TaikoEvmConfig {
             cfg_env.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
         }
 
+        let blob_excess_gas_and_price = taiko_spec_id
+            .into_eth_spec()
+            .is_enabled_in(SpecId::CANCUN)
+            .then_some(BlobExcessGasAndPrice { excess_blob_gas: 0, blob_gasprice: 1 });
+
         let block_env = BlockEnv {
             number: U256::from(block_number),
             beneficiary: payload.execution_payload.fee_recipient,
@@ -96,7 +105,7 @@ impl ConfigureEngineEvm<TaikoExecutionData> for TaikoEvmConfig {
             prevrandao: Some(payload.execution_payload.prev_randao),
             gas_limit: payload.execution_payload.gas_limit,
             basefee: payload.execution_payload.base_fee_per_gas.saturating_to(),
-            blob_excess_gas_and_price: None,
+            blob_excess_gas_and_price,
         };
 
         EvmEnv { cfg_env, block_env }
@@ -158,9 +167,16 @@ impl ConfigureEvm for TaikoEvmConfig {
 
     /// Creates a new [`EvmEnv`] for the given header.
     fn evm_env(&self, header: &Header) -> EvmEnvFor<Self> {
+        let taiko_spec_id = taiko_revm_spec(&self.chain_spec().inner, header);
+
         let cfg_env = CfgEnv::new()
             .with_chain_id(self.chain_spec().inner.chain().id())
             .with_spec(taiko_revm_spec(&self.chain_spec().inner, header));
+
+        let blob_excess_gas_and_price = taiko_spec_id
+            .into_eth_spec()
+            .is_enabled_in(SpecId::CANCUN)
+            .then_some(BlobExcessGasAndPrice { excess_blob_gas: 0, blob_gasprice: 1 });
 
         let block_env = BlockEnv {
             number: U256::from(header.number()),
@@ -170,7 +186,7 @@ impl ConfigureEvm for TaikoEvmConfig {
             prevrandao: header.mix_hash(),
             gas_limit: header.gas_limit(),
             basefee: header.base_fee_per_gas().unwrap(),
-            blob_excess_gas_and_price: None,
+            blob_excess_gas_and_price,
         };
 
         EvmEnv { cfg_env, block_env }
@@ -186,6 +202,12 @@ impl ConfigureEvm for TaikoEvmConfig {
         parent: &Header,
         attributes: &Self::NextBlockEnvCtx,
     ) -> Result<EvmEnvFor<Self>, Self::Error> {
+        let taiko_spec_id = taiko_spec_by_timestamp_and_block_number(
+            self.chain_spec(),
+            attributes.timestamp,
+            parent.number() + 1,
+        );
+
         let cfg = CfgEnv::new().with_chain_id(self.chain_spec().inner.chain().id()).with_spec(
             taiko_spec_by_timestamp_and_block_number(
                 &self.chain_spec().inner,
@@ -193,6 +215,11 @@ impl ConfigureEvm for TaikoEvmConfig {
                 parent.number + 1,
             ),
         );
+
+        let blob_excess_gas_and_price = taiko_spec_id
+            .into_eth_spec()
+            .is_enabled_in(SpecId::CANCUN)
+            .then_some(BlobExcessGasAndPrice { excess_blob_gas: 0, blob_gasprice: 1 });
 
         let block_env: BlockEnv = BlockEnv {
             number: U256::from(parent.number + 1),
@@ -202,7 +229,7 @@ impl ConfigureEvm for TaikoEvmConfig {
             prevrandao: Some(attributes.prev_randao),
             gas_limit: attributes.gas_limit,
             basefee: attributes.base_fee_per_gas,
-            blob_excess_gas_and_price: None,
+            blob_excess_gas_and_price,
         };
 
         Ok((cfg, block_env).into())
