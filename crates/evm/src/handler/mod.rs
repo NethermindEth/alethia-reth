@@ -21,6 +21,8 @@ use tracing::debug;
 
 use crate::evm::TaikoEvmExtraExecutionCtx;
 
+pub mod instructions;
+
 /// Handler for Taiko EVM, it implements the `Handler` trait
 /// and provides methods to handle the execution of transactions and the
 /// reward for the beneficiary.
