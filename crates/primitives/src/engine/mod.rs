@@ -58,9 +58,9 @@ impl EngineTypes for TaikoEngineTypes {
     /// Execution Payload V2 envelope type.
     type ExecutionPayloadEnvelopeV2 = ExecutionPayloadEnvelopeV2;
     /// Execution Payload V3 envelope type.
-    type ExecutionPayloadEnvelopeV3 = ExecutionPayloadEnvelopeV3;
+    type ExecutionPayloadEnvelopeV3 = ExecutionPayloadEnvelopeV2;
     /// Execution Payload V4 envelope type.
-    type ExecutionPayloadEnvelopeV4 = ExecutionPayloadEnvelopeV4;
+    type ExecutionPayloadEnvelopeV4 = ExecutionPayloadEnvelopeV2;
     /// Execution Payload V5 envelope type.
-    type ExecutionPayloadEnvelopeV5 = ExecutionPayloadEnvelopeV5;
+    type ExecutionPayloadEnvelopeV5 = ExecutionPayloadEnvelopeV2;
 }
