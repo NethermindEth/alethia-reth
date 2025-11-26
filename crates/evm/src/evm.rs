@@ -223,7 +223,6 @@ mod test {
             AccountInfo { nonce, balance: U256::from(0), ..Default::default() },
         );
 
-        // let mut taiko_evm = TaikoEvm::new(Context::mainnet().with_db(db).build_taiko_mainnet());
         let mut taiko_evm = TaikoEvmContext::taiko_mainnet().with_db(db).build_taiko_mainnet();
 
         let mut state = taiko_evm.transact_one(

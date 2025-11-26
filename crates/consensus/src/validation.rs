@@ -145,10 +145,8 @@ where
         validate_header_gas(header)?;
         validate_header_base_fee(header, &self.chain_spec)?;
 
-        // Ensures that Cancun related fields are valid once cancun is active.
-        if self.chain_spec.is_cancun_active_at_timestamp(header.timestamp()) {
-            validate_cancun_hardfork_header_standalone(header)?;
-        } else if header.blob_gas_used().is_some() {
+        // Ensures that Cancun related fields are still not set in Taiko
+        if header.blob_gas_used().is_some() {
             return Err(ConsensusError::BlobGasUsedUnexpected);
         } else if header.excess_blob_gas().is_some() {
             return Err(ConsensusError::ExcessBlobGasUnexpected);
@@ -211,35 +209,6 @@ where
 
         Ok(())
     }
-}
-
-/// Validates Cancun related fields in Taiko This ensures that:
-///
-///  * `blob_gas_used` exists as a header field and set to 0
-///  * `parent_beacon_block_root` is None
-///  * `excess_blob_gas` is set to 0
-pub fn validate_cancun_hardfork_header_standalone<H: BlockHeader>(
-    header: &H,
-) -> Result<(), ConsensusError> {
-    let blob_gas_used = header.blob_gas_used().ok_or(ConsensusError::BlobGasUsedMissing)?;
-    if blob_gas_used != 0 {
-        return Err(ConsensusError::BlobGasUsedDiff((blob_gas_used, 0).into()));
-    }
-
-    let excess_blob_gas = header.excess_blob_gas().ok_or(ConsensusError::ExcessBlobGasMissing)?;
-    if excess_blob_gas != 0 {
-        return Err(ConsensusError::ExcessBlobGasDiff {
-            diff: (excess_blob_gas, 0).into(),
-            parent_blob_gas_used: 0,
-            parent_excess_blob_gas: 0,
-        });
-    }
-
-    if !header.parent_beacon_block_root().is_none() {
-        return Err(ConsensusError::ParentBeaconBlockRootUnexpected);
-    }
-
-    Ok(())
 }
 
 /// Validates the base fee against the parent.
@@ -413,77 +382,6 @@ mod test {
         // Empty input
         let empty_input = [];
         assert!(validate_input_selector(&empty_input, &expected_selector).is_err());
-    }
-
-    #[test]
-    fn test_validate_cancun_hardfork_header_standalone() {
-        use alloy_primitives::B256;
-
-        // Test 1: Valid Cancun header (all fields correct)
-        let mut header = Header::default();
-        header.blob_gas_used = Some(0);
-        header.excess_blob_gas = Some(0);
-        header.parent_beacon_block_root = None;
-        assert!(
-            validate_cancun_hardfork_header_standalone(&header).is_ok(),
-            "Valid Cancun header should pass validation"
-        );
-
-        // Test 2: blob_gas_used missing - should fail
-        let mut header = Header::default();
-        header.blob_gas_used = None;
-        header.excess_blob_gas = Some(0);
-        header.parent_beacon_block_root = None;
-        assert!(
-            validate_cancun_hardfork_header_standalone(&header).is_err(),
-            "Header with missing blob_gas_used should fail"
-        );
-
-        // Test 3: blob_gas_used != 0 - should fail
-        let mut header = Header::default();
-        header.blob_gas_used = Some(100);
-        header.excess_blob_gas = Some(0);
-        header.parent_beacon_block_root = None;
-        let result = validate_cancun_hardfork_header_standalone(&header);
-        assert!(result.is_err(), "Header with blob_gas_used != 0 should fail");
-        assert!(
-            matches!(result.unwrap_err(), ConsensusError::BlobGasUsedDiff(_)),
-            "Should return BlobGasUsedDiff error"
-        );
-
-        // Test 4: excess_blob_gas missing - should fail
-        let mut header = Header::default();
-        header.blob_gas_used = Some(0);
-        header.excess_blob_gas = None;
-        header.parent_beacon_block_root = None;
-        assert!(
-            validate_cancun_hardfork_header_standalone(&header).is_err(),
-            "Header with missing excess_blob_gas should fail"
-        );
-
-        // Test 5: excess_blob_gas != 0 - should fail
-        let mut header = Header::default();
-        header.blob_gas_used = Some(0);
-        header.excess_blob_gas = Some(100);
-        header.parent_beacon_block_root = None;
-        let result = validate_cancun_hardfork_header_standalone(&header);
-        assert!(result.is_err(), "Header with excess_blob_gas != 0 should fail");
-        assert!(
-            matches!(result.unwrap_err(), ConsensusError::ExcessBlobGasDiff { .. }),
-            "Should return ExcessBlobGasDiff error"
-        );
-
-        // Test 6: parent_beacon_block_root is Some - should fail
-        let mut header = Header::default();
-        header.blob_gas_used = Some(0);
-        header.excess_blob_gas = Some(0);
-        header.parent_beacon_block_root = Some(B256::random());
-        let result = validate_cancun_hardfork_header_standalone(&header);
-        assert!(result.is_err(), "Header with parent_beacon_block_root should fail");
-        assert!(
-            matches!(result.unwrap_err(), ConsensusError::ParentBeaconBlockRootUnexpected),
-            "Should return ParentBeaconBlockRootUnexpected error"
-        );
     }
 
     #[test]

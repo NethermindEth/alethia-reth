@@ -109,7 +109,7 @@ where
     /// Performs all validation checks that can be done without loading state.
     /// For example, verifies transaction gas limit is below block gas limit.
     ///
-    /// Note: For Taiko it checks that `excess_blob_gas` is None.
+    /// Note: In Taiko blob_excess_gas_and_price is ignored.
     #[inline]
     fn validate_env(&self, evm: &mut Self::Evm) -> Result<(), Self::Error> {
         validate_env(evm.ctx())
@@ -358,10 +358,7 @@ pub fn validate_env<CTX: ContextTr, ERROR: From<InvalidHeader> + From<InvalidTra
         return Err(InvalidHeader::PrevrandaoNotSet.into());
     }
 
-    // Note: `excess_blob_gas` is required to be None for Taiko
-    if spec.is_enabled_in(SpecId::CANCUN) && context.block().blob_excess_gas_and_price().is_some() {
-        return Err(InvalidHeader::ExcessBlobGasNotSet.into());
-    }
+    // Note: `excess_blob_gas` is ignored in Taiko
 
     validate_tx_env::<CTX, InvalidTransaction>(context, spec).map_err(Into::into)
 }
