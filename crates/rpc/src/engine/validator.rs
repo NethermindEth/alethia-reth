@@ -117,6 +117,14 @@ where
 
         // First parse the block.
         let mut block = Into::<ExecutionPayloadV1>::into(payload).try_into_block()?;
+
+        // ExecutionPayloadV1 doesn't have withdrawals field (pre-Shanghai)
+        // For post-Shanghai blocks, we must set withdrawals to empty array
+        // This ensures blocks cached during sync have correct withdrawals field
+        if block.body.withdrawals.is_none() {
+            block.body.withdrawals = Some(Default::default());
+        }
+
         if !taiko_sidecar.tx_hash.is_zero() {
             block.header.transactions_root = taiko_sidecar.tx_hash;
         }

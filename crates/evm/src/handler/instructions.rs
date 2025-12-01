@@ -1,5 +1,5 @@
 use reth_revm::{
-    bytecode::opcode::BLOBBASEFEE,
+    bytecode::opcode::{BLOBBASEFEE, BLOBHASH},
     context::Host,
     handler::instructions::{EthInstructions, InstructionProvider},
     interpreter::{
@@ -36,6 +36,7 @@ where
         let mut table = instruction_table::<WIRE, HOST>();
 
         table[BLOBBASEFEE as usize] = Instruction::new(blob_basefee, 2);
+        table[BLOBHASH as usize] = Instruction::new(blob_hash, 3);
 
         Self::new(table)
     }
@@ -80,6 +81,17 @@ where
 /// In Taiko, the BLOBBASEFEE instruction is not activated,
 /// so it halts the interpreter when executed.
 pub fn blob_basefee<WIRE: InterpreterTypes, H: Host + ?Sized>(
+    context: InstructionContext<'_, H, WIRE>,
+) {
+    context.interpreter.halt_not_activated();
+
+    return;
+}
+
+/// Custom implementation of BLOBHASH instruction for Taiko EVM.
+/// In Taiko, the BLOBHASH instruction is not activated,
+/// so it halts the interpreter when executed.
+pub fn blob_hash<WIRE: InterpreterTypes, H: Host + ?Sized>(
     context: InstructionContext<'_, H, WIRE>,
 ) {
     context.interpreter.halt_not_activated();

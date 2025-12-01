@@ -4,6 +4,9 @@ use alloy_rpc_types_eth::Withdrawal;
 use reth_payload_primitives::ExecutionPayload as ExecutionPayloadTr;
 use reth_revm::primitives::B256;
 
+/// Static empty withdrawals vector for Taiko (which doesn't use withdrawals)
+static EMPTY_WITHDRAWALS: Vec<Withdrawal> = Vec::new();
+
 /// Represents the execution data for the Taiko network, which includes the execution payload and a
 /// sidecar.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -55,7 +58,7 @@ impl ExecutionPayloadTr for TaikoExecutionData {
 
     /// Returns the withdrawals associated with the block, if any.
     fn withdrawals(&self) -> Option<&Vec<Withdrawal>> {
-        None
+        Some(&EMPTY_WITHDRAWALS)
     }
 
     /// Returns the parent beacon block root, if applicable.
