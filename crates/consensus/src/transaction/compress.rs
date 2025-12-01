@@ -167,7 +167,7 @@ impl Compress for TaikoTxEnvelope {
     type Compressed = Vec<u8>;
 
     fn compress_to_buf<B: bytes::BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
-        let _ = Compact::to_compact(self, buf); // Delegates to your Compact impl!
+        let _ = Compact::to_compact(self, buf); 
     }
 }
 
