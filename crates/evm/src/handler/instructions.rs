@@ -84,8 +84,6 @@ pub fn blob_basefee<WIRE: InterpreterTypes, H: Host + ?Sized>(
     context: InstructionContext<'_, H, WIRE>,
 ) {
     context.interpreter.halt_not_activated();
-
-    return;
 }
 
 /// Custom implementation of BLOBHASH instruction for Taiko EVM.
@@ -95,6 +93,4 @@ pub fn blob_hash<WIRE: InterpreterTypes, H: Host + ?Sized>(
     context: InstructionContext<'_, H, WIRE>,
 ) {
     context.interpreter.halt_not_activated();
-
-    return;
 }
