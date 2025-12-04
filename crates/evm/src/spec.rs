@@ -22,7 +22,7 @@ impl TaikoSpecId {
     /// Converts the [`TaikoSpecId`] into a [`SpecId`].
     pub const fn into_eth_spec(self) -> SpecId {
         match self {
-            Self::GENESIS | Self::ONTAKE | Self::PACAYA | Self::SHASTA => SpecId::PRAGUE,
+            Self::GENESIS | Self::ONTAKE | Self::PACAYA | Self::SHASTA => SpecId::OSAKA,
         }
     }
 
