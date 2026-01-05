@@ -1,10 +1,12 @@
+use std::time::Duration;
+
 use alloy_primitives::Bytes;
 use jsonrpsee::tokio;
 use reth_rpc_eth_api::{
     RpcNodeCoreExt,
     helpers::{
-        AddDevSigners, Call, EthCall, EthFees, LoadBlock, LoadFee, LoadPendingBlock, LoadReceipt,
-        LoadState, SpawnBlocking, Trace, estimate::EstimateCall,
+        Call, EthCall, EthFees, LoadBlock, LoadFee, LoadPendingBlock, LoadReceipt, LoadState,
+        SpawnBlocking, Trace, estimate::EstimateCall,
     },
 };
 use reth_tasks::{
@@ -12,21 +14,18 @@ use reth_tasks::{
     pool::{BlockingTaskGuard, BlockingTaskPool},
 };
 
-use reth_evm::{SpecFor, TxEnvFor};
-use reth_provider::{ProviderHeader, ProviderTx};
+use reth_provider::ProviderHeader;
 use reth_revm::primitives::{B256, U256};
 use reth_rpc::{
     EthApi,
-    eth::{DevSigner, EthApiTypes, RpcNodeCore},
+    eth::{EthApiTypes, RpcNodeCore},
 };
 use reth_rpc_eth_api::{
-    RpcConvert, SignableTxRequest,
+    RpcConvert,
     helpers::{
         EthApiSpec, EthBlocks, EthState, EthTransactions, LoadTransaction,
-        pending_block::PendingEnvBuilder,
-        spec::{SignersForApi, SignersForRpc},
+        pending_block::PendingEnvBuilder, spec::SignersForRpc,
     },
-    types::RpcTypes,
 };
 use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock,
@@ -143,21 +142,6 @@ where
     }
 }
 
-impl<N, Rpc> AddDevSigners for TaikoEthApi<N, Rpc>
-where
-    N: RpcNodeCore,
-    EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<
-        Network: RpcTypes<TransactionRequest: SignableTxRequest<ProviderTx<N::Provider>>>,
-    >,
-{
-    /// Generates 20 random developer accounts.
-    /// Used in DEV mode.
-    fn with_dev_accounts(&self) {
-        *self.0.signers().write() = DevSigner::random_signers(20)
-    }
-}
-
 impl<N, Rpc> LoadReceipt for TaikoEthApi<N, Rpc>
 where
     N: RpcNodeCore,
@@ -170,7 +154,7 @@ impl<N, Rpc> Trace for TaikoEthApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, Spec = SpecFor<N::Evm>>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
 }
 
@@ -213,12 +197,7 @@ impl<N, Rpc> EthCall for TaikoEthApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<
-            Primitives = N::Primitives,
-            Error = EthApiError,
-            TxEnv = TxEnvFor<N::Evm>,
-            Spec = SpecFor<N::Evm>,
-        >,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, Evm = N::Evm>,
 {
 }
 
@@ -226,12 +205,7 @@ impl<N, Rpc> EstimateCall for TaikoEthApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<
-            Primitives = N::Primitives,
-            Error = EthApiError,
-            TxEnv = TxEnvFor<N::Evm>,
-            Spec = SpecFor<N::Evm>,
-        >,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, Evm = N::Evm>,
 {
 }
 
@@ -239,12 +213,7 @@ impl<N, Rpc> Call for TaikoEthApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<
-            Primitives = N::Primitives,
-            Error = EthApiError,
-            TxEnv = TxEnvFor<N::Evm>,
-            Spec = SpecFor<N::Evm>,
-        >,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, Evm = N::Evm>,
 {
     /// Returns default gas limit to use for `eth_call` and tracing RPC methods.
     ///
@@ -259,13 +228,18 @@ where
     fn max_simulate_blocks(&self) -> u64 {
         self.0.max_simulate_blocks()
     }
+
+    #[inline]
+    fn evm_memory_limit(&self) -> u64 {
+        self.0.evm_memory_limit()
+    }
 }
 
 impl<N, Rpc> EthState for TaikoEthApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, Spec = SpecFor<N::Evm>>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
     /// Returns the maximum number of blocks into the past for generating state proofs.
     fn max_proof_window(&self) -> u64 {
@@ -277,7 +251,7 @@ impl<N, Rpc> LoadState for TaikoEthApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, Spec = SpecFor<N::Evm>>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
 }
 
@@ -322,7 +296,12 @@ where
     /// Returns a handle for signing data.
     #[inline]
     fn signers(&self) -> &SignersForRpc<Self::Provider, Self::NetworkTypes> {
-        EthApiSpec::signers(&self.0)
+        self.0.signers()
+    }
+
+    #[inline]
+    fn send_raw_transaction_sync_timeout(&self) -> Duration {
+        self.0.send_raw_transaction_sync_timeout()
     }
 
     /// Decodes and recovers the transaction and submits it to the pool.
@@ -357,17 +336,8 @@ where
     N: RpcNodeCore,
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
-    /// The transaction type signers are using.
-    type Transaction = ProviderTx<N::Provider>;
-    type Rpc = Rpc::Network;
-
     /// Returns the block number is started on.
     fn starting_block(&self) -> U256 {
         self.0.starting_block()
-    }
-
-    /// Returns a handle to the signers owned by provider.
-    fn signers(&self) -> &SignersForApi<Self> {
-        self.0.signers()
     }
 }

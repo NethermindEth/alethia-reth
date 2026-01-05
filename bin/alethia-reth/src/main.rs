@@ -1,5 +1,5 @@
 //! Rust Taiko node (alethia-reth) binary executable.
-use alethia_reth_cli::{TaikoCli, TaikoCliExtArgs, chainspec::TaikoChainSpecParser};
+use alethia_reth_cli::{TaikoCli, TaikoCliExtArgs, parser::TaikoChainSpecParser};
 use alethia_reth_node::{
     TaikoNode,
     rpc::eth::{

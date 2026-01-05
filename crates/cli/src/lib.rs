@@ -1,5 +1,6 @@
 use std::{fmt, sync::Arc};
 
+use alethia_reth_block::config::TaikoEvmConfig;
 use alloy_consensus::Header;
 use clap::Parser;
 use eyre::Ok;
@@ -7,26 +8,29 @@ use reth_cli::chainspec::ChainSpecParser;
 use reth_cli_commands::{common::CliNodeTypes, launcher::FnLauncher, node::NoArgs};
 use reth_cli_runner::CliRunner;
 use reth_db::DatabaseEnv;
+use reth_ethereum::EthPrimitives;
 use reth_ethereum_cli::{Cli, interface::Commands};
-use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_ethereum_forks::Hardforks;
-use reth_evm_ethereum::EthEvmConfig;
 use reth_node_api::{NodePrimitives, NodeTypes};
 use reth_node_builder::{NodeBuilder, WithLaunchContext};
 use reth_node_metrics::recorder::install_prometheus_recorder;
+use reth_storage_api::noop::NoopProvider;
 use reth_tracing::FileWorkerGuard;
 use tracing::info;
 
-use alethia_reth_node::{TaikoNode, chainspec::spec::TaikoChainSpec};
+use alethia_reth_node::{
+    TaikoNode, chainspec::spec::TaikoChainSpec, consensus::validation::TaikoBeaconConsensus,
+    node_builder::ProviderTaikoBlockReader,
+};
 
 use crate::{
-    chainspec::TaikoChainSpecParser,
     command::{TaikoNodeCommand, TaikoNodeExtArgs},
+    parser::TaikoChainSpecParser,
 };
 use reth_node_core::args::RessArgs;
 
-pub mod chainspec;
 pub mod command;
+pub mod parser;
 pub mod tables;
 
 /// Additional Taiko CLI arguments layered on top of `RessArgs`.
@@ -133,7 +137,13 @@ impl<
         let _ = install_prometheus_recorder();
 
         let components = |spec: Arc<C::ChainSpec>| {
-            (EthEvmConfig::ethereum(spec.clone()), EthBeaconConsensus::new(spec))
+            let evm = TaikoEvmConfig::new(spec.clone());
+            let block_reader = Arc::new(ProviderTaikoBlockReader(NoopProvider::<
+                TaikoChainSpec,
+                EthPrimitives,
+            >::new(spec.clone())));
+            let consensus = Arc::new(TaikoBeaconConsensus::new(spec, block_reader));
+            (evm, consensus)
         };
         match self.inner.command {
             // NOTE: We use the custom `TaikoNodeCommand` to handle the node commands, to initialize
@@ -167,9 +177,6 @@ impl<
                 .run_command_until_exit(|ctx| command.execute::<TaikoNode, _>(ctx, components)),
             Commands::P2P(command) => runner.run_until_ctrl_c(command.execute::<TaikoNode>()),
             Commands::Config(command) => runner.run_until_ctrl_c(command.execute()),
-            Commands::Recover(command) => {
-                runner.run_command_until_exit(|ctx| command.execute::<TaikoNode>(ctx))
-            }
             Commands::Prune(command) => runner.run_until_ctrl_c(command.execute::<TaikoNode>()),
             Commands::ReExecute(command) => {
                 runner.run_until_ctrl_c(command.execute::<TaikoNode>(components))

@@ -9,7 +9,7 @@ license.workspace = true
 path = "src/lib.rs"
 
 [features]
-default = []
+default = ["serde"]
 local-payload-builder = ["dep:reth-engine-local"]
 serde = [
     "dep:serde",
@@ -19,14 +19,15 @@ serde = [
 ]
 
 [dependencies]
-alethia-reth-chainspec = { path = "../chainspec" }
 alloy-primitives = { workspace = true }
 alloy-rlp = { workspace = true }
 alloy-rpc-types-engine = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-serde = { workspace = true }
+alethia-reth-chainspec = { path = "../chainspec", default-features = false }
 reth-revm = { workspace = true }
 reth-engine-local = { workspace = true, optional = true }
+reth-chainspec = { workspace = true }
 reth-ethereum = { workspace = true }
 reth-ethereum-engine-primitives = { workspace = true }
 reth-payload-primitives = { workspace = true }
@@ -37,3 +38,7 @@ serde = { workspace = true, optional = true }
 serde_with = { workspace = true }
 sha2 = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+alloy-consensus = { workspace = true }
+reth-engine-local = { workspace = true }

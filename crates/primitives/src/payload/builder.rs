@@ -1,4 +1,4 @@
-use alloy_primitives::Bytes;
+use alloy_primitives::{Address, B256, Bytes, keccak256};
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rpc_types_engine::PayloadId;
 use alloy_rpc_types_eth::Withdrawals;
@@ -7,7 +7,6 @@ use reth_ethereum_engine_primitives::EthPayloadBuilderAttributes;
 use reth_payload_primitives::PayloadBuilderAttributes;
 use reth_primitives::Recovered;
 use reth_primitives_traits::SignerRecoverable;
-use reth_revm::primitives::{Address, B256, keccak256};
 use std::fmt::Debug;
 use tracing::debug;
 

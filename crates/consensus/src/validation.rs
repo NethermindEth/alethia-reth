@@ -2,7 +2,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use alloy_consensus::{BlockHeader as AlloyBlockHeader, EMPTY_OMMER_ROOT_HASH, Transaction};
 use alloy_hardforks::EthereumHardforks;
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{Address, B256, U256};
 use alloy_sol_types::{SolCall, sol};
 use reth_chainspec::EthChainSpec;
 use reth_consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator};
@@ -16,7 +16,6 @@ use reth_primitives_traits::{
     Block, BlockBody, BlockHeader, GotExpected, NodePrimitives, RecoveredBlock, SealedBlock,
     SealedHeader, SignedTransaction,
 };
-use reth_storage_api::BlockReader;
 
 use crate::eip4396::{SHASTA_INITIAL_BASE_FEE, calculate_next_block_eip4396_base_fee};
 use alethia_reth_chainspec::{hardfork::TaikoHardforks, spec::TaikoChainSpec};
@@ -27,7 +26,7 @@ sol! {
     function anchorV2(uint64, bytes32, uint32, (uint8, uint8, uint32, uint64, uint32)) external;
     function anchorV3(uint64, bytes32, uint32, (uint8, uint8, uint32, uint64, uint32), bytes32[]) external;
     function anchorV4(
-        (uint48, address, bytes, bytes32, (uint48, uint8, address, address)[]),
+        (uint48, address, bytes),
         (uint48, bytes32, bytes32)
     ) external;
 }
@@ -40,29 +39,48 @@ pub const ANCHOR_V4_SELECTOR: &[u8; 4] = &anchorV4Call::SELECTOR;
 
 /// The gas limit for the anchor transactions before Pacaya hardfork.
 pub const ANCHOR_V1_V2_GAS_LIMIT: u64 = 250_000;
-/// The gas limit for the anchor transactions in Pacaya hardfork blocks.
-pub const ANCHOR_V3_GAS_LIMIT: u64 = 1_000_000;
+/// The gas limit for the anchor transactions in Pacaya and Shasta hardfork blocks.
+pub const ANCHOR_V3_V4_GAS_LIMIT: u64 = 1_000_000;
+
+/// Minimal block reader interface used by Taiko consensus.
+pub trait TaikoBlockReader: Send + Sync + Debug {
+    /// Returns the timestamp of the block referenced by the given hash, if present.
+    fn block_timestamp_by_hash(&self, hash: B256) -> Option<u64>;
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct NoopTaikoBlockReader;
+
+impl TaikoBlockReader for NoopTaikoBlockReader {
+    fn block_timestamp_by_hash(&self, _hash: B256) -> Option<u64> {
+        None
+    }
+}
 
 /// Taiko consensus implementation.
 ///
 /// Provides basic checks as outlined in the execution specs.
 #[derive(Debug, Clone)]
-pub struct TaikoBeaconConsensus<R: BlockReader> {
+pub struct TaikoBeaconConsensus {
     chain_spec: Arc<TaikoChainSpec>,
-    block_reader: R,
+    block_reader: Arc<dyn TaikoBlockReader>,
 }
 
-impl<R: BlockReader> TaikoBeaconConsensus<R> {
+impl TaikoBeaconConsensus {
     /// Create a new instance of [`TaikoBeaconConsensus`]
-    pub fn new(chain_spec: Arc<TaikoChainSpec>, block_reader: R) -> Self {
+    pub fn new(chain_spec: Arc<TaikoChainSpec>, block_reader: Arc<dyn TaikoBlockReader>) -> Self {
         Self { chain_spec, block_reader }
+    }
+
+    /// Create a new instance of [`TaikoBeaconConsensus`] with a noop block reader.
+    pub fn new_with_noop_block_reader(chain_spec: Arc<TaikoChainSpec>) -> Self {
+        Self { chain_spec, block_reader: Arc::new(NoopTaikoBlockReader::default()) }
     }
 }
 
-impl<N, R> FullConsensus<N> for TaikoBeaconConsensus<R>
+impl<N> FullConsensus<N> for TaikoBeaconConsensus
 where
     N: NodePrimitives,
-    R: BlockReader + Debug,
 {
     /// Validate a block with regard to execution results:
     ///
@@ -81,10 +99,7 @@ where
     }
 }
 
-impl<B: Block, R> Consensus<B> for TaikoBeaconConsensus<R>
-where
-    R: BlockReader + Debug,
-{
+impl<B: Block> Consensus<B> for TaikoBeaconConsensus {
     /// The error type related to consensus.
     type Error = ConsensusError;
 
@@ -110,7 +125,7 @@ where
         // In Taiko network, ommer hash is always empty.
         if block.ommers_hash() != EMPTY_OMMER_ROOT_HASH {
             return Err(ConsensusError::BodyOmmersHashDiff(
-                GotExpected { got: block.ommers_hash(), expected: block.ommers_hash() }.into(),
+                GotExpected { got: block.ommers_hash(), expected: EMPTY_OMMER_ROOT_HASH }.into(),
             ));
         }
 
@@ -118,10 +133,9 @@ where
     }
 }
 
-impl<H, R> HeaderValidator<H> for TaikoBeaconConsensus<R>
+impl<H> HeaderValidator<H> for TaikoBeaconConsensus
 where
     H: BlockHeader,
-    R: BlockReader + Debug,
 {
     /// Validate if header is correct and follows consensus specification.
     ///
@@ -167,15 +181,19 @@ where
                 });
             }
 
+            // Calculate the expected base fee using EIP-4396 rules. For the first post-genesis
+            // block there is no grandparent timestamp, so reuse the default Shasta base fee.
             let expected_base_fee = if parent.number() == 0 {
-                // First post-genesis block lacks a grandparent timestamp, so keep the default base
-                // fee.
                 SHASTA_INITIAL_BASE_FEE
             } else {
-                calculate_next_block_eip4396_base_fee(
-                    parent.header(),
-                    parent_block_time(&self.block_reader, parent)?,
-                )
+                parent_block_time(self.block_reader.as_ref(), parent)
+                    .map(|block_time| {
+                        calculate_next_block_eip4396_base_fee(parent.header(), block_time)
+                    })
+                    // If we cannot retrieve the grandparent timestamp (e.g. when running without a
+                    // fully wired block reader), fall back to the header's base fee to avoid
+                    // rejecting the block outright.
+                    .unwrap_or(header_base_fee)
             };
 
             // Verify the block's base fee matches the expected value.
@@ -218,21 +236,17 @@ pub fn validate_against_parent_eip4396_base_fee<
 }
 
 /// Calculates the time difference between the parent and grandparent blocks.
-fn parent_block_time<R, H>(
-    block_reader: &R,
+fn parent_block_time<H>(
+    block_reader: &dyn TaikoBlockReader,
     parent: &SealedHeader<H>,
 ) -> Result<u64, ConsensusError>
 where
-    R: BlockReader,
     H: BlockHeader,
 {
     let grandparent_hash = parent.header().parent_hash();
     let grandparent_timestamp = block_reader
-        .block_by_hash(grandparent_hash)
-        .map_err(|_| ConsensusError::ParentUnknown { hash: grandparent_hash })?
-        .ok_or(ConsensusError::ParentUnknown { hash: grandparent_hash })?
-        .header()
-        .timestamp();
+        .block_timestamp_by_hash(grandparent_hash)
+        .ok_or(ConsensusError::ParentUnknown { hash: grandparent_hash })?;
 
     Ok(parent.header().timestamp() - grandparent_timestamp)
 }
@@ -268,7 +282,7 @@ where
 
     // Ensure the gas limit is correct.
     let gas_limit = if chain_spec.is_pacaya_active_at_block(block.number()) {
-        ANCHOR_V3_GAS_LIMIT
+        ANCHOR_V3_V4_GAS_LIMIT
     } else {
         ANCHOR_V1_V2_GAS_LIMIT
     };
@@ -383,6 +397,7 @@ mod test {
         let mut parent = Header {
             gas_limit: 30_000_000,
             base_fee_per_gas: Some(1_000_000_000),
+            number: 1,
             ..Default::default()
         };
 

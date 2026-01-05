@@ -3,11 +3,10 @@ pub use alethia_reth_chainspec as chainspec;
 pub use alethia_reth_consensus as consensus;
 pub use alethia_reth_db as db;
 pub use alethia_reth_evm as evm;
+pub use alethia_reth_node_builder as node_builder;
 pub use alethia_reth_payload as payload;
 pub use alethia_reth_primitives as primitives;
 pub use alethia_reth_rpc as rpc;
-
-pub mod builder;
 
 use block::config::TaikoEvmConfig;
 use chainspec::spec::TaikoChainSpec;
@@ -36,7 +35,7 @@ use rpc::{
 };
 use std::sync::Arc;
 
-use crate::builder::{
+use alethia_reth_node_builder::{
     TaikoConsensusBuilder, TaikoEthApiBuilder, TaikoExecutorBuilder, TaikoNetworkBuilder,
     TaikoPayloadBuilderBuilder,
 };

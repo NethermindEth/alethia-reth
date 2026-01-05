@@ -26,6 +26,8 @@ pub trait TaikoExtApi {
     fn head_l1_origin(&self) -> RpcResult<Option<RpcL1Origin>>;
     #[method(name = "lastL1OriginByBatchID")]
     fn last_l1_origin_by_batch_id(&self, batch_id: U256) -> RpcResult<Option<RpcL1Origin>>;
+    #[method(name = "lastBlockIDByBatchID")]
+    fn last_block_id_by_batch_id(&self, batch_id: U256) -> RpcResult<Option<U256>>;
 }
 
 /// The Taiko RPC extension implementation.
@@ -69,14 +71,11 @@ where
                 break;
             }
 
-            if input.len() < 36 {
+            let Some(proposal_id) = extract_anchor_v4_proposal_id(input) else {
                 break;
-            }
+            };
 
-            let mut proposal_id_bytes = [0u8; 32];
-            proposal_id_bytes.copy_from_slice(&input[4..36]);
-
-            if U256::from_be_bytes(proposal_id_bytes) == batch_id {
+            if proposal_id == batch_id {
                 return Ok(Some(block.header().number()));
             }
 
@@ -92,6 +91,26 @@ where
         }
 
         Ok(None)
+    }
+
+    /// Retrieves the last block number for a batch, preferring the DB cache before falling back to
+    /// a scan.
+    fn resolve_last_block_number_by_batch_id(&self, batch_id: U256) -> RpcResult<U256> {
+        let provider =
+            self.provider.database_provider_ro().map_err(|_| EthApiError::InternalEthError)?;
+        if let Some(block_number) = provider
+            .into_tx()
+            .get::<BatchToLastBlock>(batch_id.to())
+            .map_err(|_| EthApiError::InternalEthError)?
+        {
+            return Ok(U256::from(block_number));
+        }
+
+        let block_number = self
+            .find_last_block_number_by_batch_id(batch_id)?
+            .ok_or(TaikoApiError::GethNotFound)?;
+
+        Ok(U256::from(block_number))
     }
 }
 
@@ -130,21 +149,96 @@ where
 
     /// Retrieves the last L1 origin by its batch ID from the database.
     fn last_l1_origin_by_batch_id(&self, batch_id: U256) -> RpcResult<Option<RpcL1Origin>> {
-        let provider =
-            self.provider.database_provider_ro().map_err(|_| EthApiError::InternalEthError)?;
-        let block_number = provider
-            .into_tx()
-            .get::<BatchToLastBlock>(batch_id.to())
-            .map_err(|_| EthApiError::InternalEthError)?;
+        self.l1_origin_by_id(self.resolve_last_block_number_by_batch_id(batch_id)?)
+    }
 
-        if let Some(block_number) = block_number {
-            return self.l1_origin_by_id(U256::from(block_number));
-        }
+    /// Retrieves the last block ID for the given batch ID.
+    fn last_block_id_by_batch_id(&self, batch_id: U256) -> RpcResult<Option<U256>> {
+        Ok(Some(self.resolve_last_block_number_by_batch_id(batch_id)?))
+    }
+}
 
-        let block_number = self
-            .find_last_block_number_by_batch_id(batch_id)?
-            .ok_or(TaikoApiError::GethNotFound)?;
+/// Parses the proposal ID encoded in the first argument of an `anchorV4` call.
+///
+/// Layout (selector `0x20ae54eb`):
+/// - word0: offset to the encoded `(uint48,address,bytes)` tuple (relative to start of calldata
+///   after selector)
+/// - word1..3: static second argument `(uint48,bytes32,bytes32)`
+/// - at the offset: word0' = proposalId (uint48, left‑padded in 32 bytes)
+///
+/// The helper reads the offset then pulls the first word of that tuple to recover the proposal ID.
+fn extract_anchor_v4_proposal_id(input: &[u8]) -> Option<U256> {
+    const SELECTOR_LEN: usize = 4;
+    const WORD_SIZE: usize = 32;
 
-        self.l1_origin_by_id(U256::from(block_number))
+    if input.len() < SELECTOR_LEN + WORD_SIZE {
+        return None;
+    }
+
+    let calldata = &input[SELECTOR_LEN..];
+    if calldata.len() < WORD_SIZE {
+        return None;
+    }
+
+    let mut offset_bytes = [0u8; WORD_SIZE];
+    offset_bytes.copy_from_slice(&calldata[..WORD_SIZE]);
+    let offset = usize::try_from(U256::from_be_bytes(offset_bytes)).ok()?;
+
+    let proposal_id_start = SELECTOR_LEN.checked_add(offset)?;
+    let proposal_id_end = proposal_id_start.checked_add(WORD_SIZE)?;
+    if proposal_id_end > input.len() {
+        return None;
+    }
+
+    let mut proposal_id_bytes = [0u8; WORD_SIZE];
+    proposal_id_bytes.copy_from_slice(&input[proposal_id_start..proposal_id_end]);
+    Some(U256::from_be_bytes(proposal_id_bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_anchor_v4_proposal_id_real_payload() {
+        let calldata = hex_decode(concat!(
+            "0x",
+            // selector + head (offset to first tuple, then the static second tuple fields)
+            "20ae54eb0000000000000000000000000000000000000000000000000000000000000080",
+            "000000000000000000000000000000000000000000000000000000000000000a",
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            "2222222222222222222222222222222222222222222222222222222222222222",
+            // first tuple data (proposal params)
+            "000000000000000000000000000000000000000000000000000000000000000a",
+            "0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+            "0000000000000000000000000000000000000000000000000000000000000060",
+            // empty bytes payload for proverAuth
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        ));
+        assert_eq!(extract_anchor_v4_proposal_id(&calldata), Some(U256::from(10u64)));
+    }
+
+    #[test]
+    fn returns_none_for_truncated_calldata() {
+        assert!(extract_anchor_v4_proposal_id(&[0u8; 10]).is_none());
+    }
+
+    fn hex_decode(value: &str) -> Vec<u8> {
+        let value = value.strip_prefix("0x").unwrap_or(value);
+        let digits: String = value.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(
+            digits.len().is_multiple_of(2),
+            "hex value must have an even length (got {})",
+            digits.len()
+        );
+        digits
+            .as_bytes()
+            .chunks(2)
+            .map(|chunk| {
+                let hi = (chunk[0] as char).to_digit(16).expect("invalid hex") as u8;
+                let lo = (chunk[1] as char).to_digit(16).expect("invalid hex") as u8;
+                (hi << 4) | lo
+            })
+            .collect()
     }
 }

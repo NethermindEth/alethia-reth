@@ -27,6 +27,6 @@ reth-chainspec = { workspace = true }
 reth-ethereum-forks = { workspace = true }
 reth-evm = { workspace = true }
 reth-network-peers = { workspace = true }
-reth-trie-common = { workspace = true }
+reth-primitives = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true }

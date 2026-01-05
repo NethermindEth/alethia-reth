@@ -92,18 +92,25 @@ impl RpcL1Origin {
     }
 }
 
-#[cfg(feature = "local-payload-builder")]
+// #[cfg(any(feature = "local-payload-builder", test))]
 /// Implement `PayloadAttributesBuilder` for `LocalPayloadAttributesBuilder<TaikoChainSpec>`,
 /// to build `TaikoPayloadAttributes` from the local payload attributes builder.
-impl reth_payload_primitives::PayloadAttributesBuilder<TaikoPayloadAttributes>
-    for reth_engine_local::LocalPayloadAttributesBuilder<
-        alethia_reth_chainspec::spec::TaikoChainSpec,
-    >
+#[cfg(feature = "local-payload-builder")]
+impl<C> reth_payload_primitives::PayloadAttributesBuilder<TaikoPayloadAttributes>
+    for reth_engine_local::LocalPayloadAttributesBuilder<C>
+where
+    C: Send + Sync + reth_chainspec::EthereumHardforks + 'static,
 {
     /// Return a new payload attribute from the builder.
     fn build(&self, timestamp: u64) -> TaikoPayloadAttributes {
+        // Delegate to the underlying ETH payload builder to avoid self-recursion.
+
+        let eth_payload_attributes = <Self as reth_payload_primitives::PayloadAttributesBuilder<
+            EthPayloadAttributes,
+        >>::build(self, timestamp);
+
         TaikoPayloadAttributes {
-            payload_attributes: self.build(timestamp),
+            payload_attributes: eth_payload_attributes,
             base_fee_per_gas: U256::ZERO,
             block_metadata: TaikoBlockMetadata {
                 beneficiary: Address::random(),
@@ -123,5 +130,42 @@ impl reth_payload_primitives::PayloadAttributesBuilder<TaikoPayloadAttributes>
                 signature: [0; 65],
             },
         }
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "local-payload-builder")]
+mod tests {
+    use super::*;
+    use alloy_consensus::Header;
+    use reth_chainspec::ChainSpec;
+    use reth_engine_local::LocalPayloadAttributesBuilder;
+    use reth_payload_primitives::PayloadAttributesBuilder;
+    use reth_primitives_traits::constants::MAXIMUM_GAS_LIMIT_BLOCK;
+    use std::sync::Arc;
+
+    #[test]
+    fn build_is_deterministic_and_delegates() {
+        let builder = LocalPayloadAttributesBuilder::new(Arc::new(ChainSpec::<Header>::default()));
+        let ts = 1_700_000_000u64;
+
+        let first: TaikoPayloadAttributes = builder.build(ts);
+        let second: TaikoPayloadAttributes = builder.build(ts);
+
+        // Delegation: timestamps come from the underlying ETH payload builder.
+        assert_eq!(first.payload_attributes.timestamp(), ts);
+        assert_eq!(second.payload_attributes.timestamp(), ts);
+
+        // Stable Taiko defaults that should not depend on randomness.
+        assert_eq!(first.block_metadata.timestamp, U256::from(ts));
+        assert_eq!(second.block_metadata.timestamp, U256::from(ts));
+        assert_eq!(first.block_metadata.gas_limit, MAXIMUM_GAS_LIMIT_BLOCK);
+        assert_eq!(second.block_metadata.gas_limit, MAXIMUM_GAS_LIMIT_BLOCK);
+        assert_eq!(first.block_metadata.tx_list, AlloyBytes::new());
+        assert_eq!(second.block_metadata.tx_list, AlloyBytes::new());
+
+        // L1 origin defaults remain zeroed and stable.
+        assert_eq!(first.l1_origin.block_id, U256::ZERO);
+        assert_eq!(first.l1_origin, second.l1_origin);
     }
 }
