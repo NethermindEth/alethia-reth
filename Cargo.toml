@@ -34,7 +34,7 @@ alloy-network = { version = "1.0.41", default-features = false }
 alloy-primitives = { version = "1.4.1", default-features = false, features = [
     "map-foldhash",
 ] }
-alloy-trie = { version = "0.9.1", default-features = false }
+# alloy-trie = { version = "0.9.1", default-features = false }
 alloy-rlp = { version = "0.3.10", default-features = false, features = [
     "core-net",
 ] }

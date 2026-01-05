@@ -174,7 +174,7 @@ fn decode_transactions(bytes: &[u8]) -> Result<Vec<TransactionSigned>, alloy_rlp
 
 #[cfg(test)]
 mod test {
-    use reth_revm::primitives::hex;
+    use alloy_primitives::hex;
 
     use super::*;
 

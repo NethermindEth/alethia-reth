@@ -14,7 +14,6 @@ use reth_ethereum_forks::Hardforks;
 use reth_node_api::{NodePrimitives, NodeTypes};
 use reth_node_builder::{NodeBuilder, WithLaunchContext};
 use reth_node_metrics::recorder::install_prometheus_recorder;
-use reth_storage_api::noop::NoopProvider;
 use reth_tracing::FileWorkerGuard;
 use tracing::info;
 
@@ -22,16 +21,16 @@ use alethia_reth_node::{
     TaikoNode, chainspec::spec::TaikoChainSpec, consensus::validation::TaikoBeaconConsensus,
     node_builder::ProviderTaikoBlockReader,
 };
+use reth_storage_api::noop::NoopProvider;
 
-use crate::{
-    command::{TaikoNodeCommand, TaikoNodeExtArgs},
-    parser::TaikoChainSpecParser,
-};
+use crate::command::{TaikoNodeCommand, TaikoNodeExtArgs};
 use reth_node_core::args::RessArgs;
 
 pub mod command;
 pub mod parser;
 pub mod tables;
+
+pub use parser::TaikoChainSpecParser;
 
 /// Additional Taiko CLI arguments layered on top of `RessArgs`.
 #[derive(Debug, clap::Args)]
