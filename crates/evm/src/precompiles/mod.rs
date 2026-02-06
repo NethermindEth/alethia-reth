@@ -49,10 +49,7 @@ impl TaikoPrecompiles {
 /// Returns precompiles for Ontake spec.
 pub fn ontake() -> &'static Precompiles {
     static INSTANCE: OnceLock<Precompiles> = OnceLock::new();
-    INSTANCE.get_or_init(|| {
-        let precompiles = Precompiles::berlin().clone();
-        precompiles
-    })
+    INSTANCE.get_or_init(|| Precompiles::berlin().clone())
 }
 
 /// Returns precompiles for Pacaya spec.
@@ -68,10 +65,7 @@ pub fn pacaya() -> &'static Precompiles {
 /// Returns precompiles for Shasta spec.
 pub fn shasta() -> &'static Precompiles {
     static INSTANCE: OnceLock<Precompiles> = OnceLock::new();
-    INSTANCE.get_or_init(|| {
-        let precompiles = pacaya().clone();
-        precompiles
-    })
+    INSTANCE.get_or_init(|| pacaya().clone())
 }
 
 impl<CTX> PrecompileProvider<CTX> for TaikoPrecompiles
@@ -115,9 +109,9 @@ impl Default for TaikoPrecompiles {
     }
 }
 
-impl Into<PrecompilesMap> for TaikoPrecompiles {
-    fn into(self) -> PrecompilesMap {
-        PrecompilesMap::from_static(&self.inner.precompiles)
+impl From<TaikoPrecompiles> for PrecompilesMap {
+    fn from(val: TaikoPrecompiles) -> Self {
+        PrecompilesMap::from_static(val.inner.precompiles)
     }
 }
 

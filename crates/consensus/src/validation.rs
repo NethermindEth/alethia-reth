@@ -71,7 +71,7 @@ impl TaikoBeaconConsensus {
 
     /// Create a new instance of [`TaikoBeaconConsensus`] with a noop block reader.
     pub fn new_with_noop_block_reader(chain_spec: Arc<TaikoChainSpec>) -> Self {
-        Self { chain_spec, block_reader: Arc::new(NoopTaikoBlockReader::default()) }
+        Self { chain_spec, block_reader: Arc::new(NoopTaikoBlockReader) }
     }
 }
 
