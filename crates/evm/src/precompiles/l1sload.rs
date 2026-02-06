@@ -18,15 +18,19 @@ pub const L1SLOAD: Precompile = Precompile::new(
 pub const L1SLOAD_FIXED_GAS: u64 = 2000;
 pub const L1SLOAD_PER_LOAD_GAS: u64 = 2000;
 
-/// Expected input length: 20 bytes (address) + 32 bytes (storage key) + 32 bytes (block number) = 84 bytes
+/// Expected input length: 20 bytes (address) + 32 bytes (storage key) + 32 bytes (block number),
+/// total 84 bytes
 pub const EXPECTED_INPUT_LENGTH: usize = 84;
 
 /// Maximum number of L1 blocks to look back from the anchor block
 pub const L1SLOAD_MAX_BLOCK_LOOKBACK: u64 = 256;
 
+/// Type alias for the L1 storage cache map.
+type L1StorageCache = HashMap<(Address, B256, B256), B256>;
+
 /// In-memory cache for L1 storage values
 /// Key: (contract_address, storage_key, block_number) -> Value: storage_value
-static L1_STORAGE_CACHE: LazyLock<Mutex<HashMap<(Address, B256, B256), B256>>> =
+static L1_STORAGE_CACHE: LazyLock<Mutex<L1StorageCache>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Current anchor block ID context for L1SLOAD operations (stored as u64 for range checking)
