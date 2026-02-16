@@ -6,6 +6,7 @@ use alethia_reth_primitives::{
 };
 use alloy_consensus::{BlockHeader, EMPTY_ROOT_HASH};
 use alloy_rpc_types_engine::{ExecutionPayloadV1, PayloadError};
+use alloy_rpc_types_eth::Withdrawals;
 use reth_chainspec::EthChainSpec;
 use reth_engine_primitives::EngineApiValidator;
 use reth_engine_tree::tree::{TreeConfig, payload_validator::BasicEngineValidator};
@@ -16,19 +17,18 @@ use reth_node_api::{
 };
 use reth_node_builder::{
     invalid_block_hook::InvalidBlockHookExt,
-    rpc::{EngineValidatorBuilder, PayloadValidatorBuilder},
+    rpc::{ChangesetCache, EngineValidatorBuilder, PayloadValidatorBuilder},
 };
 use reth_payload_primitives::{
     EngineApiMessageVersion, EngineObjectValidationError, InvalidPayloadAttributesError,
     PayloadAttributes, PayloadOrAttributes,
 };
 use reth_primitives::RecoveredBlock;
-use reth_primitives_traits::Block as BlockTrait;
+use reth_primitives_traits::{Block as BlockTrait, SealedBlock};
 use std::sync::Arc;
 
 /// Builder for [`TaikoEngineValidator`].
 #[derive(Debug, Default, Clone)]
-#[non_exhaustive]
 pub struct TaikoEngineValidatorBuilder;
 
 impl<N> PayloadValidatorBuilder<N> for TaikoEngineValidatorBuilder
@@ -67,6 +67,7 @@ where
         self,
         ctx: &AddOnsContext<'_, N>,
         tree_config: TreeConfig,
+        changeset_cache: ChangesetCache,
     ) -> eyre::Result<Self::EngineValidator> {
         let validator = <Self as PayloadValidatorBuilder<N>>::build(self, ctx).await?;
         let data_dir = ctx.config.datadir.clone().resolve_datadir(ctx.config.chain.chain());
@@ -78,6 +79,7 @@ where
             validator,
             tree_config,
             invalid_block_hook,
+            changeset_cache,
         ))
     }
 }
@@ -102,21 +104,17 @@ where
     /// The block type used by the engine.
     type Block = Block;
 
-    /// Ensures that the given payload does not violate any consensus rules that concern the block's
-    /// layout.
-    ///
-    /// This function must convert the payload into the executable block and pre-validate its
-    /// fields.
-    fn ensure_well_formed_payload(
+    /// Converts the given payload into a sealed block without recovering signatures.
+    fn convert_payload_to_block(
         &self,
         payload: Types::ExecutionData,
-    ) -> Result<RecoveredBlock<Self::Block>, NewPayloadError> {
-        let TaikoExecutionData { execution_payload: payload, taiko_sidecar } = payload;
+    ) -> Result<SealedBlock<Self::Block>, NewPayloadError> {
+        let TaikoExecutionData { execution_payload, taiko_sidecar } = payload;
 
-        let expected_hash = payload.block_hash;
+        let expected_hash = execution_payload.block_hash;
 
         // First parse the block.
-        let mut block = Into::<ExecutionPayloadV1>::into(payload).try_into_block()?;
+        let mut block = Into::<ExecutionPayloadV1>::into(execution_payload).try_into_block()?;
         if !taiko_sidecar.tx_hash.is_zero() {
             block.header.transactions_root = taiko_sidecar.tx_hash;
         }
@@ -126,6 +124,7 @@ where
             } else {
                 block.header.withdrawals_root = Some(EMPTY_ROOT_HASH);
             }
+            block.body.withdrawals = Some(Withdrawals::default());
         }
         let sealed_block = block.seal_slow();
 
@@ -138,6 +137,20 @@ where
             .map_err(|e| NewPayloadError::Other(e.into()));
         }
 
+        Ok(sealed_block)
+    }
+
+    /// Ensures that the given payload does not violate any consensus rules that concern the block's
+    /// layout.
+    ///
+    /// This function must convert the payload into the executable block and pre-validate its
+    /// fields.
+    fn ensure_well_formed_payload(
+        &self,
+        payload: Types::ExecutionData,
+    ) -> Result<RecoveredBlock<Self::Block>, NewPayloadError> {
+        let sealed_block =
+            <Self as PayloadValidator<Types>>::convert_payload_to_block(self, payload)?;
         sealed_block.try_recover().map_err(|e| NewPayloadError::Other(e.into()))
     }
 

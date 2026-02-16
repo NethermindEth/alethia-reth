@@ -25,7 +25,7 @@ where
         + 'static,
 {
     /// Payload builder implementation.
-    type PayloadBuilder = TaikoPayloadBuilder<Node::Provider, TaikoEvmConfig>;
+    type PayloadBuilder = TaikoPayloadBuilder<Node::Provider, Pool, TaikoEvmConfig>;
 
     /// Spawns the payload service and returns the handle to it.
     ///
@@ -36,7 +36,6 @@ where
         pool: Pool,
         evm_config: TaikoEvmConfig,
     ) -> eyre::Result<Self::PayloadBuilder> {
-        let _ = pool;
-        Ok(TaikoPayloadBuilder::new(ctx.provider().clone(), evm_config))
+        Ok(TaikoPayloadBuilder::new(ctx.provider().clone(), pool, evm_config))
     }
 }

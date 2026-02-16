@@ -51,11 +51,7 @@ impl TaikoHardforks for TaikoChainSpec {
     /// Retrieves [`ForkCondition`] from `fork`. If `fork` is not present, returns
     /// [`ForkCondition::Never`].
     fn taiko_fork_activation(&self, fork: TaikoHardfork) -> ForkCondition {
-        match fork {
-            TaikoHardfork::Ontake => self.inner.fork(TaikoHardfork::Ontake),
-            TaikoHardfork::Pacaya => self.inner.fork(TaikoHardfork::Pacaya),
-            TaikoHardfork::Shasta => self.inner.fork(TaikoHardfork::Shasta),
-        }
+        self.inner.fork(fork)
     }
 }
 
@@ -73,12 +69,21 @@ pub static TAIKO_HOODI_HARDFORKS: LazyLock<ChainHardforks> = LazyLock::new(|| {
     ChainHardforks::new(extend_with_shared_hardforks(vec![
         (TaikoHardfork::Ontake.boxed(), ForkCondition::Block(0)),
         (TaikoHardfork::Pacaya.boxed(), ForkCondition::Block(0)),
-        (TaikoHardfork::Shasta.boxed(), ForkCondition::Never),
+        (TaikoHardfork::Shasta.boxed(), ForkCondition::Timestamp(1_770_296_400)),
     ]))
 });
 
 /// Taiko Devnet list of hardforks.
 pub static TAIKO_DEVNET_HARDFORKS: LazyLock<ChainHardforks> = LazyLock::new(|| {
+    ChainHardforks::new(extend_with_shared_hardforks(vec![
+        (TaikoHardfork::Ontake.boxed(), ForkCondition::Block(0)),
+        (TaikoHardfork::Pacaya.boxed(), ForkCondition::Block(0)),
+        (TaikoHardfork::Shasta.boxed(), ForkCondition::Timestamp(0)),
+    ]))
+});
+
+/// Taiko Masaya list of hardforks.
+pub static TAIKO_MASAYA_HARDFORKS: LazyLock<ChainHardforks> = LazyLock::new(|| {
     ChainHardforks::new(extend_with_shared_hardforks(vec![
         (TaikoHardfork::Ontake.boxed(), ForkCondition::Block(0)),
         (TaikoHardfork::Pacaya.boxed(), ForkCondition::Block(0)),
@@ -137,6 +142,20 @@ mod test {
     #[test]
     fn test_devnet_shasta_uses_timestamp_activation() {
         let shasta = TAIKO_DEVNET_HARDFORKS.fork(TaikoHardfork::Shasta);
+        assert!(shasta.is_timestamp(), "shasta activation should be timestamp-based");
+        assert_eq!(shasta, ForkCondition::Timestamp(0));
+    }
+
+    #[test]
+    fn test_hoodi_shasta_timestamp() {
+        let shasta = TAIKO_HOODI_HARDFORKS.fork(TaikoHardfork::Shasta);
+        assert!(shasta.is_timestamp(), "shasta activation should be timestamp-based");
+        assert_eq!(shasta, ForkCondition::Timestamp(1_770_296_400));
+    }
+
+    #[test]
+    fn test_masaya_shasta_uses_timestamp_activation() {
+        let shasta = TAIKO_MASAYA_HARDFORKS.fork(TaikoHardfork::Shasta);
         assert!(shasta.is_timestamp(), "shasta activation should be timestamp-based");
         assert_eq!(shasta, ForkCondition::Timestamp(0));
     }

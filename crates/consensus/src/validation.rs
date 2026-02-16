@@ -1,11 +1,11 @@
 use std::{fmt::Debug, sync::Arc};
 
-use alloy_consensus::{BlockHeader as AlloyBlockHeader, EMPTY_OMMER_ROOT_HASH, Transaction};
-use alloy_hardforks::EthereumHardforks;
+use alloy_consensus::{
+    BlockHeader as AlloyBlockHeader, EMPTY_OMMER_ROOT_HASH, constants::MAXIMUM_EXTRA_DATA_SIZE,
+};
 use alloy_primitives::{Address, B256, U256};
 use alloy_sol_types::{SolCall, sol};
-use reth_chainspec::EthChainSpec;
-use reth_consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator};
+use reth_consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator, ReceiptRootBloom};
 use reth_consensus_common::validation::{
     validate_against_parent_hash_number, validate_body_against_header, validate_header_base_fee,
     validate_header_extra_data, validate_header_gas,
@@ -87,8 +87,15 @@ where
         &self,
         block: &RecoveredBlock<N::Block>,
         result: &BlockExecutionResult<N::Receipt>,
+        receipt_root_bloom: Option<ReceiptRootBloom>,
     ) -> Result<(), ConsensusError> {
-        validate_block_post_execution(block, &self.chain_spec, &result.receipts, &result.requests)?;
+        validate_block_post_execution(
+            block,
+            &self.chain_spec,
+            &result.receipts,
+            &result.requests,
+            receipt_root_bloom,
+        )?;
         validate_anchor_transaction_in_block::<<N as NodePrimitives>::Block>(
             block,
             &self.chain_spec,
@@ -97,9 +104,6 @@ where
 }
 
 impl<B: Block> Consensus<B> for TaikoBeaconConsensus {
-    /// The error type related to consensus.
-    type Error = ConsensusError;
-
     /// Ensures the block response data matches the header.
     ///
     /// This ensures the body response items match the header's hashes:
@@ -152,7 +156,7 @@ where
             return Err(ConsensusError::TheMergeOmmerRootIsNotEmpty);
         }
 
-        validate_header_extra_data(header)?;
+        validate_header_extra_data(header, MAXIMUM_EXTRA_DATA_SIZE)?;
         validate_header_gas(header)?;
         validate_header_base_fee(header, &self.chain_spec)
     }
@@ -183,9 +187,15 @@ where
             let expected_base_fee = if parent.number() == 0 {
                 SHASTA_INITIAL_BASE_FEE
             } else {
+                let parent_base_fee =
+                    parent.header().base_fee_per_gas().ok_or(ConsensusError::BaseFeeMissing)?;
                 parent_block_time(self.block_reader.as_ref(), parent)
                     .map(|block_time| {
-                        calculate_next_block_eip4396_base_fee(parent.header(), block_time)
+                        calculate_next_block_eip4396_base_fee(
+                            parent.header(),
+                            block_time,
+                            parent_base_fee,
+                        )
                     })
                     // If we cannot retrieve the grandparent timestamp (e.g. when running without a
                     // fully wired block reader), fall back to the header's base fee to avoid
@@ -215,15 +225,10 @@ where
     }
 }
 
-/// Validates the base fee against the parent.
+/// Validates that the header has a base fee set (required after EIP-4396).
 #[inline]
-pub fn validate_against_parent_eip4396_base_fee<
-    ChainSpec: EthChainSpec + EthereumHardforks + TaikoHardforks,
-    H: BlockHeader,
->(
+pub fn validate_against_parent_eip4396_base_fee<H: BlockHeader>(
     header: &H,
-    _parent: &H,
-    _chain_spec: &ChainSpec,
 ) -> Result<(), ConsensusError> {
     if header.base_fee_per_gas().is_none() {
         return Err(ConsensusError::BaseFeeMissing);
@@ -248,25 +253,28 @@ where
     Ok(parent.header().timestamp() - grandparent_timestamp)
 }
 
-/// Validates the anchor transaction in the block.
-pub fn validate_anchor_transaction_in_block<B>(
-    block: &RecoveredBlock<B>,
-    chain_spec: &TaikoChainSpec,
-) -> Result<(), ConsensusError>
-where
-    B: Block,
-{
-    let anchor_transaction = match block.body().transactions().first() {
-        Some(tx) => tx,
-        None => return Ok(()),
-    };
+/// Context required to validate an anchor transaction.
+pub struct AnchorValidationContext {
+    /// Timestamp for hardfork selection.
+    pub timestamp: u64,
+    /// Block number for hardfork selection and gas limit rules.
+    pub block_number: u64,
+    /// Base fee per gas for tip validation.
+    pub base_fee_per_gas: u64,
+}
 
+/// Validates a single anchor transaction against the current hardfork rules.
+pub fn validate_anchor_transaction(
+    anchor_transaction: &impl SignedTransaction,
+    chain_spec: &TaikoChainSpec,
+    ctx: AnchorValidationContext,
+) -> Result<(), ConsensusError> {
     // Ensure the input data starts with one of the anchor selectors.
-    if chain_spec.is_shasta_active(block.header().timestamp()) {
+    if chain_spec.is_shasta_active(ctx.timestamp) {
         validate_input_selector(anchor_transaction.input(), ANCHOR_V4_SELECTOR)?;
-    } else if chain_spec.is_pacaya_active_at_block(block.number()) {
+    } else if chain_spec.is_pacaya_active_at_block(ctx.block_number) {
         validate_input_selector(anchor_transaction.input(), ANCHOR_V3_SELECTOR)?;
-    } else if chain_spec.is_ontake_active_at_block(block.number()) {
+    } else if chain_spec.is_ontake_active_at_block(ctx.block_number) {
         validate_input_selector(anchor_transaction.input(), ANCHOR_V2_SELECTOR)?;
     } else {
         validate_input_selector(anchor_transaction.input(), ANCHOR_V1_SELECTOR)?;
@@ -278,7 +286,7 @@ where
     }
 
     // Ensure the gas limit is correct.
-    let gas_limit = if chain_spec.is_pacaya_active_at_block(block.number()) {
+    let gas_limit = if chain_spec.is_pacaya_active_at_block(ctx.block_number) {
         ANCHOR_V3_V4_GAS_LIMIT
     } else {
         ANCHOR_V1_V2_GAS_LIMIT
@@ -292,13 +300,9 @@ where
 
     // Ensure the tip is equal to zero.
     let anchor_transaction_tip =
-        anchor_transaction
-            .effective_tip_per_gas(block.header().base_fee_per_gas().ok_or_else(|| {
-                ConsensusError::Other("Block base fee per gas must be set".into())
-            })?)
-            .ok_or_else(|| {
-                ConsensusError::Other("Anchor transaction tip must be set to zero".into())
-            })?;
+        anchor_transaction.effective_tip_per_gas(ctx.base_fee_per_gas).ok_or_else(|| {
+            ConsensusError::Other("Anchor transaction tip must be set to zero".into())
+        })?;
 
     if anchor_transaction_tip != 0 {
         return Err(ConsensusError::Other(format!(
@@ -319,6 +323,32 @@ where
     Ok(())
 }
 
+/// Validates the anchor transaction in the block.
+pub fn validate_anchor_transaction_in_block<B>(
+    block: &RecoveredBlock<B>,
+    chain_spec: &TaikoChainSpec,
+) -> Result<(), ConsensusError>
+where
+    B: Block,
+{
+    let anchor_transaction = match block.body().transactions().first() {
+        Some(tx) => tx,
+        None => return Ok(()),
+    };
+
+    validate_anchor_transaction(
+        anchor_transaction,
+        chain_spec,
+        AnchorValidationContext {
+            timestamp: block.header().timestamp(),
+            block_number: block.number(),
+            base_fee_per_gas: block.header().base_fee_per_gas().ok_or_else(|| {
+                ConsensusError::Other("Block base fee per gas must be set".into())
+            })?,
+        },
+    )
+}
+
 // Validates the transaction input data against the expected selector.
 fn validate_input_selector(
     input: &[u8],
@@ -334,38 +364,19 @@ fn validate_input_selector(
 
 #[cfg(test)]
 mod test {
-    use alloy_consensus::Header;
-    use alloy_primitives::U64;
-
     use super::validate_input_selector;
+    use alloy_consensus::Header;
 
     use super::*;
 
     #[test]
     fn test_validate_against_parent_eip4396_base_fee() {
-        let parent_header = &Header::default();
-        let mut header = parent_header.clone();
-        header.parent_hash = parent_header.hash_slow();
-        header.number = parent_header.number + 1;
+        let mut header = Header::default();
 
-        assert!(
-            validate_against_parent_eip4396_base_fee(
-                &header,
-                parent_header,
-                &Arc::new(TaikoChainSpec::default())
-            )
-            .is_err()
-        );
+        assert!(validate_against_parent_eip4396_base_fee(&header).is_err());
 
-        header.base_fee_per_gas = Some(U64::random().to::<u64>());
-        assert!(
-            validate_against_parent_eip4396_base_fee(
-                &header,
-                parent_header,
-                &Arc::new(TaikoChainSpec::default())
-            )
-            .is_ok()
-        );
+        header.base_fee_per_gas = Some(1);
+        assert!(validate_against_parent_eip4396_base_fee(&header).is_ok());
     }
 
     #[test]
@@ -405,12 +416,20 @@ mod test {
 
         // Test 1: Gas used equals target (gas_limit / 2)
         parent.gas_used = 15_000_000;
-        let base_fee = calculate_next_block_eip4396_base_fee(&parent, BLOCK_TIME_TARGET);
+        let base_fee = calculate_next_block_eip4396_base_fee(
+            &parent,
+            BLOCK_TIME_TARGET,
+            parent.base_fee_per_gas.expect("parent base fee set"),
+        );
         assert_eq!(base_fee, 1_000_000_000, "Base fee should remain the same when at target");
 
         // Test 2: Gas used above target
         parent.gas_used = 20_000_000;
-        let base_fee = calculate_next_block_eip4396_base_fee(&parent, BLOCK_TIME_TARGET);
+        let base_fee = calculate_next_block_eip4396_base_fee(
+            &parent,
+            BLOCK_TIME_TARGET,
+            parent.base_fee_per_gas.expect("parent base fee set"),
+        );
         assert_eq!(
             base_fee, MAX_BASE_FEE,
             "Base fee should stay clamped at MAX_BASE_FEE when the parent is already at the cap"
@@ -418,7 +437,11 @@ mod test {
 
         // Test 3: Gas used below target
         parent.gas_used = 10_000_000;
-        let base_fee = calculate_next_block_eip4396_base_fee(&parent, BLOCK_TIME_TARGET);
+        let base_fee = calculate_next_block_eip4396_base_fee(
+            &parent,
+            BLOCK_TIME_TARGET,
+            parent.base_fee_per_gas.expect("parent base fee set"),
+        );
         assert!(base_fee < 1_000_000_000, "Base fee should decrease when below target");
     }
 }

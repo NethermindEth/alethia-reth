@@ -96,6 +96,7 @@ where
             ext,
             engine,
             era,
+            static_files,
         } = *self.0;
 
         // set up node config
@@ -115,6 +116,7 @@ where
             pruning,
             engine,
             era,
+            static_files,
         };
 
         // Apply Taiko-specific devnet Shasta timestamp override if specified.
