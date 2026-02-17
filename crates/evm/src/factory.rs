@@ -21,7 +21,7 @@ use crate::{
 /// A factory type for creating instances of the Taiko EVM given a certain input.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct TaikoEvmFactory {
-    // Used for customizing the treasury address, chain-specific will be used if None
+    /// Used for customizing the treasury address, chain-specific will be used if None
     treasury_address: Option<Address>,
 }
 

@@ -1,7 +1,11 @@
-use std::ops::{Deref, DerefMut};
+//! Alloy EVM trait adapter for Taiko execution semantics.
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use alloy_evm::{Database, Evm, EvmEnv};
-use alloy_primitives::{hex, map::HashMap};
+use alloy_primitives::hex;
 use reth_revm::{
     Context, ExecuteEvm, InspectEvm, Inspector,
     context::{
@@ -16,13 +20,16 @@ use tracing::debug;
 
 use crate::{evm::TaikoEvm, handler::get_treasury_address, spec::TaikoSpecId};
 
+/// System caller address used for Taiko anchor system-call pre-execution.
 pub const TAIKO_GOLDEN_TOUCH_ADDRESS: [u8; 20] = hex!("0x0000777735367b36bc9b61c50022d9d0700db4ec");
 
 /// A wrapper around the Taiko EVM that implements the `Evm` trait in `alloy_evm`.
 pub struct TaikoEvmWrapper<DB: Database, INSP, P> {
+    /// Wrapped Taiko EVM instance implementing execution behavior.
     inner: TaikoEvm<TaikoEvmContext<DB>, INSP, P>,
+    /// Whether to run transactions through the inspector execution path.
     inspect: bool,
-    // Used for customizing the treasury address, chain-specific will be used if None
+    /// Used for customizing the treasury address, chain-specific will be used if None
     treasury_address: Option<Address>,
 }
 
@@ -32,6 +39,7 @@ impl<DB: Database, INSP, P> TaikoEvmWrapper<DB, INSP, P> {
         Self { inner: evm, inspect, treasury_address: None }
     }
 
+    /// Creates a new [`TaikoEvmWrapper`] instance with the given treasury address.
     pub fn with_treasury_address(mut self, address: Option<Address>) -> Self {
         self.treasury_address = address;
         self
@@ -69,6 +77,7 @@ impl<DB: Database, I, P> DerefMut for TaikoEvmWrapper<DB, I, P> {
     }
 }
 
+/// Canonical Taiko EVM context type used by the Alloy adapter.
 pub type TaikoEvmContext<DB> = Context<BlockEnv, TxEnv, CfgEnv<TaikoSpecId>, DB>;
 
 /// An instance of an ethereum virtual machine.
@@ -283,8 +292,7 @@ where
     }
 }
 
-// Decode the anchor system call data from the given bytes, if
-// the bytes are not of the expected length or format, return None.
+/// Decode encoded anchor system-call bytes into `(base_fee_share_pctg, caller_nonce)`.
 #[inline]
 pub fn decode_anchor_system_call_data(bytes: &Bytes) -> Option<(u64, u64)> {
     if bytes.len() != 16 {

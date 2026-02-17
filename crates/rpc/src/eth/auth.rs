@@ -1,4 +1,5 @@
 #![allow(clippy::too_many_arguments)]
+
 use std::sync::Arc;
 
 use alloy_consensus::{BlockHeader as _, Transaction as _};
@@ -46,8 +47,11 @@ use alethia_reth_primitives::{
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct PreBuiltTxList<T> {
+    /// Selected transactions encoded for RPC response delivery.
     pub tx_list: Vec<T>,
+    /// Estimated gas used by all transactions in `tx_list`.
     pub estimated_gas_used: u64,
+    /// Total transaction-list byte length used for DA constraints.
     pub bytes_length: u64,
 }
 
@@ -57,18 +61,83 @@ impl<T> Default for PreBuiltTxList<T> {
     }
 }
 
+/// Request payload for `taikoAuth_txPoolContent`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+pub struct TxPoolContentParams {
+    /// Fee-recipient address used while simulating candidate transaction lists.
+    pub beneficiary: Address,
+    /// Base fee applied to candidate transaction-list construction.
+    pub base_fee: u64,
+    /// Maximum gas limit allocated per candidate transaction list.
+    pub block_max_gas_limit: u64,
+    /// Maximum DA bytes allowed per candidate transaction list.
+    pub max_bytes_per_tx_list: u64,
+    /// Optional local addresses to prioritize during tx-pool selection.
+    pub locals: Option<Vec<Address>>,
+    /// Maximum number of candidate transaction lists to return.
+    pub max_transactions_lists: u64,
+}
+
+/// Request payload for `taikoAuth_txPoolContentWithMinTip`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+pub struct TxPoolContentWithMinTipParams {
+    /// Fee-recipient address used while simulating candidate transaction lists.
+    pub beneficiary: Address,
+    /// Base fee applied to candidate transaction-list construction.
+    pub base_fee: u64,
+    /// Maximum gas limit allocated per candidate transaction list.
+    pub block_max_gas_limit: u64,
+    /// Maximum DA bytes allowed per candidate transaction list.
+    pub max_bytes_per_tx_list: u64,
+    /// Optional local addresses to prioritize during tx-pool selection.
+    pub locals: Option<Vec<Address>>,
+    /// Maximum number of candidate transaction lists to return.
+    pub max_transactions_lists: u64,
+    /// Minimum transaction tip required for inclusion.
+    pub min_tip: u64,
+}
+
+impl From<TxPoolContentParams> for TxPoolContentWithMinTipParams {
+    /// Converts base tx-pool query parameters into the min-tip variant with `min_tip = 0`.
+    fn from(params: TxPoolContentParams) -> Self {
+        let TxPoolContentParams {
+            beneficiary,
+            base_fee,
+            block_max_gas_limit,
+            max_bytes_per_tx_list,
+            locals,
+            max_transactions_lists,
+        } = params;
+        Self {
+            beneficiary,
+            base_fee,
+            block_max_gas_limit,
+            max_bytes_per_tx_list,
+            locals,
+            max_transactions_lists,
+            min_tip: 0,
+        }
+    }
+}
+
 /// trait interface for a custom auth rpc namespace: `taikoAuth`
 ///
 /// This defines the Taiko namespace where all methods are configured as trait functions.
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "taikoAuth"))]
 #[cfg_attr(feature = "client", rpc(server, client, namespace = "taikoAuth"))]
 pub trait TaikoAuthExtApi<T: RpcObject> {
+    /// Stores the current L1 head origin block id.
     #[method(name = "setHeadL1Origin")]
     async fn set_head_l1_origin(&self, id: U256) -> RpcResult<U256>;
+    /// Upserts the given L1 origin entry.
     #[method(name = "updateL1Origin")]
     async fn update_l1_origin(&self, l1_origin: RpcL1Origin) -> RpcResult<Option<RpcL1Origin>>;
+    /// Stores a signature for an existing L1 origin entry.
     #[method(name = "setL1OriginSignature")]
     async fn set_l1_origin_signature(&self, id: U256, signature: Bytes) -> RpcResult<RpcL1Origin>;
+    /// Stores an explicit batch-to-last-block mapping.
     #[method(name = "setBatchToLastBlock")]
     async fn set_batch_to_last_block(&self, batch_id: U256, block_number: U256) -> RpcResult<u64>;
     /// Returns the last L1 origin for a given batch ID.
@@ -77,6 +146,7 @@ pub trait TaikoAuthExtApi<T: RpcObject> {
     /// Returns the last block ID for a given batch ID.
     #[method(name = "lastBlockIDByBatchID")]
     async fn last_block_id_by_batch_id(&self, batch_id: U256) -> RpcResult<Option<U256>>;
+    /// Returns candidate transaction lists using a minimum tip threshold.
     #[method(name = "txPoolContentWithMinTip")]
     async fn tx_pool_content_with_min_tip(
         &self,
@@ -89,6 +159,7 @@ pub trait TaikoAuthExtApi<T: RpcObject> {
         min_tip: u64,
     ) -> RpcResult<Vec<PreBuiltTxList<T>>>;
 
+    /// Returns candidate transaction lists without enforcing a tip threshold.
     #[method(name = "txPoolContent")]
     async fn tx_pool_content(
         &self,
@@ -104,9 +175,13 @@ pub trait TaikoAuthExtApi<T: RpcObject> {
 /// A concrete implementation of the `TaikoAuthExtApi` trait.
 #[derive(Clone)]
 pub struct TaikoAuthExt<Pool, Eth, Evm, Provider: DatabaseProviderFactory> {
+    /// Provider used for block lookups and database access.
     provider: Provider,
+    /// Transaction pool used during candidate-list selection.
     pool: Pool,
+    /// RPC transaction converter used for pending tx formatting.
     tx_resp_builder: Eth,
+    /// EVM configuration used to construct candidate payload environments.
     evm_config: Evm,
 }
 
@@ -131,7 +206,7 @@ enum LastBlockSearchResult {
 }
 
 /// Maximum number of blocks to scan backwards when resolving a batch ID.
-const MAX_BACKWARD_SCAN_BLOCKS: u64 = 192 * 1024;
+const MAX_BACKWARD_SCAN_BLOCKS: u64 = 192 * 21_600;
 #[cfg(test)]
 /// Shorter backward scan limit for test execution.
 const TEST_MAX_BACKWARD_SCAN_BLOCKS: u64 = 64;
@@ -277,16 +352,15 @@ where
 
     /// Resolves the last block number, preferring the DB cache before scanning.
     fn resolve_last_block_number_by_batch_id(&self, batch_id: U256) -> RpcResult<U256> {
-        if let Ok(provider) = self.provider.database_provider_ro() {
-            let batch_lookup = provider.into_tx().get::<BatchToLastBlock>(batch_id.to());
-            if let Ok(Some(block_number)) = batch_lookup {
-                return Ok(U256::from(block_number));
-            }
-            if let Err(error) = batch_lookup &&
-                !Self::is_missing_table_error(&error)
-            {
-                return Err(internal_eth_error(error).into());
-            }
+        let provider = self.provider.database_provider_ro().map_err(internal_eth_error)?;
+        let batch_lookup = provider.into_tx().get::<BatchToLastBlock>(batch_id.to());
+        if let Ok(Some(block_number)) = batch_lookup {
+            return Ok(U256::from(block_number));
+        }
+        if let Err(error) = batch_lookup &&
+            !Self::is_missing_table_error(&error)
+        {
+            return Err(internal_eth_error(error).into());
         }
 
         match self.find_last_block_number_by_batch_id(batch_id)? {
@@ -299,6 +373,16 @@ where
                 Err(TaikoApiError::ProposalLastBlockLookbackExceeded.into())
             }
         }
+    }
+
+    /// Reads a stored L1 origin by resolved block ID.
+    fn read_l1_origin_by_block_id(&self, block_id: U256) -> RpcResult<Option<RpcL1Origin>> {
+        let provider = self.provider.database_provider_ro().map_err(internal_eth_error)?;
+        Ok(provider
+            .into_tx()
+            .get::<StoredL1OriginTable>(block_id.to())
+            .map_err(internal_eth_error)?
+            .map(|l1_origin| l1_origin.into_rpc()))
     }
 }
 
@@ -380,18 +464,9 @@ where
 
     /// Retrieves the last L1 origin for the given batch ID.
     async fn last_l1_origin_by_batch_id(&self, batch_id: U256) -> RpcResult<Option<RpcL1Origin>> {
-        let provider = self.provider.database_provider_ro().map_err(internal_eth_error)?;
-
         let block_id = self.resolve_last_block_number_by_batch_id(batch_id)?;
 
-        Ok(Some(
-            provider
-                .into_tx()
-                .get::<StoredL1OriginTable>(block_id.to())
-                .map_err(internal_eth_error)?
-                .ok_or(TaikoApiError::GethNotFound)?
-                .into_rpc(),
-        ))
+        self.read_l1_origin_by_block_id(block_id)
     }
 
     /// Retrieves the last block ID for the given batch ID.
@@ -527,7 +602,8 @@ where
 mod tests {
     use super::*;
     use alethia_reth_db::model::{
-        STORED_L1_HEAD_ORIGIN_KEY, StoredL1HeadOriginTable, StoredL1Origin, StoredL1OriginTable,
+        BatchToLastBlock, STORED_L1_HEAD_ORIGIN_KEY, StoredL1HeadOriginTable, StoredL1Origin,
+        StoredL1OriginTable,
     };
     use alloy_consensus::{BlockBody, Header, TxLegacy};
     use alloy_primitives::{Address, Bytes, Signature, TxKind, U256};
@@ -548,6 +624,60 @@ mod tests {
         test_utils::MockNodeTypesWithDB,
     };
     use std::{path::PathBuf, sync::Arc};
+
+    #[test]
+    #[cfg(feature = "serde")]
+    /// Ensures `txPoolContent` accepts a camelCase object payload.
+    fn tx_pool_content_params_deserialize_from_camel_case() {
+        let value = serde_json::json!({
+            "beneficiary": Address::from([0x11; 20]),
+            "baseFee": 10u64,
+            "blockMaxGasLimit": 15_000_000u64,
+            "maxBytesPerTxList": 120_000u64,
+            "locals": [Address::from([0x22; 20])],
+            "maxTransactionsLists": 4u64
+        });
+
+        let params: TxPoolContentParams =
+            serde_json::from_value(value).expect("txPoolContent params should deserialize");
+        assert_eq!(params.base_fee, 10);
+        assert_eq!(params.block_max_gas_limit, 15_000_000);
+        assert_eq!(params.max_bytes_per_tx_list, 120_000);
+        assert_eq!(params.max_transactions_lists, 4);
+        assert_eq!(
+            params.locals,
+            Some(vec![Address::from([0x22; 20])]),
+            "locals should preserve each address"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "serde")]
+    /// Ensures `txPoolContentWithMinTip` accepts a camelCase object payload.
+    fn tx_pool_content_with_min_tip_params_deserialize_from_camel_case() {
+        let value = serde_json::json!({
+            "beneficiary": Address::from([0x33; 20]),
+            "baseFee": 20u64,
+            "blockMaxGasLimit": 20_000_000u64,
+            "maxBytesPerTxList": 240_000u64,
+            "locals": [Address::from([0x44; 20]), Address::from([0x55; 20])],
+            "maxTransactionsLists": 8u64,
+            "minTip": 2u64
+        });
+
+        let params: TxPoolContentWithMinTipParams = serde_json::from_value(value)
+            .expect("txPoolContentWithMinTip params should deserialize");
+        assert_eq!(params.base_fee, 20);
+        assert_eq!(params.block_max_gas_limit, 20_000_000);
+        assert_eq!(params.max_bytes_per_tx_list, 240_000);
+        assert_eq!(params.max_transactions_lists, 8);
+        assert_eq!(params.min_tip, 2);
+        assert_eq!(
+            params.locals,
+            Some(vec![Address::from([0x44; 20]), Address::from([0x55; 20])]),
+            "locals should preserve each address"
+        );
+    }
 
     /// Builds a ProviderFactory wired with both reth and Taiko tables for lookup tests.
     fn create_taiko_test_provider_factory() -> ProviderFactory<MockNodeTypesWithDB> {
@@ -584,6 +714,7 @@ mod tests {
                 .with_default_tables()
                 .build()
                 .expect("failed to create test RocksDB provider"),
+            reth_tasks::Runtime::default(),
         )
         .expect("failed to create test provider factory")
     }
@@ -652,7 +783,7 @@ mod tests {
         let api = TaikoAuthExt::new(provider, (), (), ());
 
         let err = api.resolve_last_block_number_by_batch_id(proposal_id).unwrap_err();
-        assert_eq!(err.code(), -32005);
+        assert_eq!(err.code(), -32000);
         assert_eq!(
             err.message(),
             "proposal last block uncertain: BatchToLastBlockID missing and no newer proposal observed",
@@ -720,7 +851,7 @@ mod tests {
         let api = TaikoAuthExt::new(provider, (), (), ());
 
         let err = api.resolve_last_block_number_by_batch_id(proposal_id).unwrap_err();
-        assert_eq!(err.code(), -32005);
+        assert_eq!(err.code(), -32000);
         assert_eq!(
             err.message(),
             "proposal last block uncertain: BatchToLastBlockID missing and no newer proposal observed",
@@ -730,7 +861,7 @@ mod tests {
     #[test]
     /// Verifies the production lookback limit constant.
     fn uses_expected_lookback_limit_constant() {
-        assert_eq!(MAX_BACKWARD_SCAN_BLOCKS, 192 * 1024);
+        assert_eq!(MAX_BACKWARD_SCAN_BLOCKS, 192 * 21_600);
     }
 
     #[test]
@@ -815,7 +946,7 @@ mod tests {
         let api = TaikoAuthExt::new(provider, (), (), ());
 
         let err = api.resolve_last_block_number_by_batch_id(target_batch_id).unwrap_err();
-        assert_eq!(err.code(), -32006);
+        assert_eq!(err.code(), -32000);
         assert_eq!(
             err.message(),
             "proposal last block lookback exceeded: BatchToLastBlockID missing and lookback limit reached",
@@ -887,8 +1018,35 @@ mod tests {
         let api = TaikoAuthExt::new(provider, (), (), ());
 
         let err = api.resolve_last_block_number_by_batch_id(target_batch_id).unwrap_err();
-        assert_eq!(err.code(), -32004);
+        assert_eq!(err.code(), -32000);
         assert_eq!(err.message(), "not found");
+    }
+
+    #[test]
+    /// Returns None when batch mapping exists but no L1 origin row is present.
+    fn returns_none_when_batch_mapping_exists_but_l1_origin_missing() {
+        let batch_id = U256::from(1u64);
+        let block_id = U256::from(7u64);
+
+        let factory = create_taiko_test_provider_factory();
+        let mut provider_rw = factory.provider_rw().expect("provider rw");
+        let genesis_header = Header { number: 0, gas_limit: 1_000_000, ..Default::default() };
+        let genesis_block = genesis_header.clone().into_block(BlockBody::default());
+        let genesis_recovered = RecoveredBlock::new_unhashed(genesis_block, vec![]);
+        provider_rw.insert_block(&genesis_recovered).expect("insert genesis block");
+        {
+            let tx = provider_rw.tx_mut();
+            tx.put::<BatchToLastBlock>(batch_id.to(), block_id.to()).expect("insert batch mapping");
+        }
+        provider_rw.commit().expect("commit");
+
+        let latest = SealedHeader::seal_slow(genesis_header);
+        let provider = BlockchainProvider::with_latest(factory, latest).expect("provider");
+        let api = TaikoAuthExt::new(provider, (), (), ());
+
+        let resolved = api.resolve_last_block_number_by_batch_id(batch_id).unwrap();
+        assert_eq!(resolved, block_id);
+        assert_eq!(api.read_l1_origin_by_block_id(resolved).unwrap(), None);
     }
 
     #[test]

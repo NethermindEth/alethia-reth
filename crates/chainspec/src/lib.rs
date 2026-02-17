@@ -1,3 +1,6 @@
+#![cfg_attr(not(test), deny(missing_docs, clippy::missing_docs_in_private_items))]
+#![cfg_attr(test, allow(missing_docs, clippy::missing_docs_in_private_items))]
+//! Taiko chain-spec presets and genesis helpers.
 use std::sync::{Arc, LazyLock};
 
 use alloy_primitives::B256;
@@ -16,7 +19,9 @@ use crate::{
     spec::TaikoChainSpec,
 };
 
+/// Taiko hardfork identifiers and activation tables.
 pub mod hardfork;
+/// Taiko chain-spec wrapper traits and helper methods.
 pub mod spec;
 
 /// Genesis hash for the Taiko Devnet network.
@@ -51,7 +56,7 @@ pub static TAIKO_HOODI: LazyLock<Arc<TaikoChainSpec>> =
 pub static TAIKO_MASAYA: LazyLock<Arc<TaikoChainSpec>> =
     LazyLock::new(|| make_taiko_masaya_chain_spec().into());
 
-// Creates a new [`ChainSpec`] for the Taiko Devnet network.
+/// Create a new [`ChainSpec`] for the Taiko Devnet network.
 fn make_taiko_devnet_chain_spec() -> TaikoChainSpec {
     make_taiko_chain_spec(
         include_str!("genesis/devnet.json"),
@@ -60,7 +65,7 @@ fn make_taiko_devnet_chain_spec() -> TaikoChainSpec {
     )
 }
 
-// Creates a new [`ChainSpec`] for the Taiko Hoodi network.
+/// Create a new [`ChainSpec`] for the Taiko Hoodi network.
 fn make_taiko_hoodi_chain_spec() -> TaikoChainSpec {
     make_taiko_chain_spec(
         include_str!("genesis/taiko-hoodi.json"),
@@ -69,7 +74,7 @@ fn make_taiko_hoodi_chain_spec() -> TaikoChainSpec {
     )
 }
 
-// Creates a new [`ChainSpec`] for the Taiko Mainnet network.
+/// Create a new [`ChainSpec`] for the Taiko Mainnet network.
 fn make_taiko_mainnet_chain_spec() -> TaikoChainSpec {
     make_taiko_chain_spec(
         include_str!("genesis/mainnet.json"),
@@ -78,7 +83,7 @@ fn make_taiko_mainnet_chain_spec() -> TaikoChainSpec {
     )
 }
 
-// Creates a new [`ChainSpec`] for the Taiko Masaya network.
+/// Create a new [`ChainSpec`] for the Taiko Masaya network.
 fn make_taiko_masaya_chain_spec() -> TaikoChainSpec {
     make_taiko_chain_spec(
         include_str!("genesis/masaya.json"),
@@ -87,8 +92,7 @@ fn make_taiko_masaya_chain_spec() -> TaikoChainSpec {
     )
 }
 
-// Creates a new [`ChainSpec`] for the Taiko network with the given genesis JSON and double-check
-// the given genesis hash.
+/// Create a new [`ChainSpec`] for Taiko from JSON genesis data and a known expected hash.
 fn make_taiko_chain_spec(
     genesis_json: &str,
     genesis_hash: B256,
