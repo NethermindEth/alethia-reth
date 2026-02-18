@@ -154,7 +154,18 @@ where
 
         validate_header_extra_data(header, MAXIMUM_EXTRA_DATA_SIZE)?;
         validate_header_gas(header)?;
-        validate_header_base_fee(header, &self.chain_spec)
+        validate_header_base_fee(header, &self.chain_spec)?;
+
+        // Ensures that Cancun related fields are still not set in Taiko
+        if header.blob_gas_used().is_some() {
+            return Err(ConsensusError::BlobGasUsedUnexpected);
+        } else if header.excess_blob_gas().is_some() {
+            return Err(ConsensusError::ExcessBlobGasUnexpected);
+        } else if header.parent_beacon_block_root().is_some() {
+            return Err(ConsensusError::ParentBeaconBlockRootUnexpected);
+        }
+
+        Ok(())
     }
 
     /// Validate that the header information regarding parent are correct.

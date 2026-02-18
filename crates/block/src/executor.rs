@@ -99,8 +99,6 @@ where
         self.evm.db_mut().set_state_clear_flag(state_clear_flag);
 
         self.system_caller.apply_blockhashes_contract_call(self.ctx.parent_hash, &mut self.evm)?;
-        self.system_caller
-            .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
 
         // Initialize the golden touch address nonce if it is not already set.
         if !self.evm_extra_execution_ctx_initialized {
