@@ -15,9 +15,9 @@ use reth_primitives_traits::SealedHeader;
 use serde_with::{As, Bytes, base64::Base64};
 
 /// Taiko Payload Attributes
-#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TaikoPayloadAttributes {
     /// The ETH payload attributes
     #[cfg_attr(feature = "serde", serde(flatten))]
