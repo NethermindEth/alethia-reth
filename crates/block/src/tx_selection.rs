@@ -3,14 +3,14 @@
 //! This module provides a unified interface for selecting and executing transactions
 //! from the mempool, used by both the payload builder and the RPC pre-building endpoint.
 
+use alethia_reth_consensus::transaction::TaikoTxEnvelope;
+use alethia_reth_primitives::TaikoPrimitives;
 use alloy_eips::Encodable2718;
 use alloy_primitives::Address;
 use alloy_rlp::{encode_list, list_length};
 use core::fmt;
 use flate2::{Compression, write::ZlibEncoder};
 use op_alloy_flz::tx_estimated_size_fjord_bytes;
-use alethia_reth_consensus::transaction::TaikoTxEnvelope;
-use alethia_reth_primitives::TaikoPrimitives;
 use reth_evm::{
     block::{BlockExecutionError, BlockValidationError, InternalBlockExecutionError},
     execute::BlockBuilder,
@@ -199,8 +199,7 @@ fn zlib_tx_list_size_bytes(list: &ExecutedTxList, candidate: &Recovered<TaikoTxE
     txs.extend(list.transactions.iter().map(|etx| etx.tx.inner()));
     txs.push(candidate.inner());
 
-    let mut rlp_bytes =
-        Vec::with_capacity(list_length::<&TaikoTxEnvelope, TaikoTxEnvelope>(&txs));
+    let mut rlp_bytes = Vec::with_capacity(list_length::<&TaikoTxEnvelope, TaikoTxEnvelope>(&txs));
     encode_list::<&TaikoTxEnvelope, TaikoTxEnvelope>(&txs, &mut rlp_bytes);
 
     let mut encoder = ZlibEncoder::new(Vec::new(), zlib_compression());

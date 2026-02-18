@@ -13,10 +13,7 @@ impl ReceiptBuilder for TaikoReceiptBuilder {
     type Transaction = TaikoTxEnvelope;
     type Receipt = Receipt;
 
-    fn build_receipt<E: Evm>(
-        &self,
-        ctx: ReceiptBuilderCtx<'_, TaikoTxType, E>,
-    ) -> Self::Receipt {
+    fn build_receipt<E: Evm>(&self, ctx: ReceiptBuilderCtx<'_, TaikoTxType, E>) -> Self::Receipt {
         let ReceiptBuilderCtx { tx_type, result, cumulative_gas_used, .. } = ctx;
         Receipt {
             tx_type: tx_type.into(),

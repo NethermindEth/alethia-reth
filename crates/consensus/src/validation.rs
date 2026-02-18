@@ -154,7 +154,7 @@ impl<B: Block> Consensus<B> for TaikoBeaconConsensus {
             return Err(ConsensusError::BlockTooLarge {
                 rlp_length: block.rlp_length(),
                 max_rlp_length: MAX_RLP_BLOCK_SIZE,
-            })
+            });
         }
 
         Ok(())
@@ -436,7 +436,7 @@ where
         return Err(ConsensusError::BlockGasUsed {
             gas: GotExpected { got: cumulative_gas_used, expected: block.header().gas_used() },
             gas_spent_by_tx: gas_spent_by_transactions(receipts),
-        })
+        });
     }
 
     // Before Byzantium, receipts contained state root that would mean that expensive
@@ -455,7 +455,7 @@ where
             .map(|r| Bytes::from(r.with_bloom_ref().encoded_2718()))
             .collect::<Vec<_>>();
         tracing::debug!(%error, ?receipts, "receipts verification failed");
-        return Err(error)
+        return Err(error);
     }
 
     Ok(())
@@ -496,13 +496,13 @@ fn compare_receipts_root_and_logs_bloom(
     if calculated_receipts_root != expected_receipts_root {
         return Err(ConsensusError::BodyReceiptRootDiff(
             GotExpected { got: calculated_receipts_root, expected: expected_receipts_root }.into(),
-        ))
+        ));
     }
 
     if calculated_logs_bloom != expected_logs_bloom {
         return Err(ConsensusError::BodyBloomLogDiff(
             GotExpected { got: calculated_logs_bloom, expected: expected_logs_bloom }.into(),
-        ))
+        ));
     }
 
     Ok(())
