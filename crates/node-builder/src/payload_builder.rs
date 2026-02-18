@@ -1,8 +1,8 @@
 use alethia_reth_block::config::TaikoEvmConfig;
 use alethia_reth_chainspec::spec::TaikoChainSpec;
+use alethia_reth_consensus::transaction::TaikoTxEnvelope;
 use alethia_reth_payload::TaikoPayloadBuilder;
-use alethia_reth_primitives::engine::TaikoEngineTypes;
-use reth_ethereum::{EthPrimitives, TransactionSigned};
+use alethia_reth_primitives::{TaikoPrimitives, engine::TaikoEngineTypes};
 use reth_node_api::{FullNodeTypes, NodeTypes};
 use reth_node_builder::{BuilderContext, components::PayloadBuilderBuilder};
 use reth_transaction_pool::{PoolTransaction, TransactionPool};
@@ -15,12 +15,12 @@ impl<Node, Pool> PayloadBuilderBuilder<Node, Pool, TaikoEvmConfig> for TaikoPayl
 where
     Node: FullNodeTypes<
         Types: NodeTypes<
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             ChainSpec = TaikoChainSpec,
             Payload = TaikoEngineTypes,
         >,
     >,
-    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TransactionSigned>>
+    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TaikoTxEnvelope>>
         + Unpin
         + 'static,
 {

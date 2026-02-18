@@ -2,6 +2,7 @@
 use alethia_reth_block::config::TaikoEvmConfig;
 use alethia_reth_chainspec::spec::TaikoChainSpec;
 use alethia_reth_primitives::{
+    TaikoBlock, TaikoPrimitives,
     engine::{TaikoEngineTypes, types::TaikoExecutionData},
     payload::attributes::TaikoPayloadAttributes,
 };
@@ -11,7 +12,6 @@ use alloy_rpc_types_eth::Withdrawals;
 use reth_chainspec::EthChainSpec;
 use reth_engine_primitives::EngineApiValidator;
 use reth_engine_tree::tree::{TreeConfig, payload_validator::BasicEngineValidator};
-use reth_ethereum::{Block, EthPrimitives};
 use reth_evm::ConfigureEngineEvm;
 use reth_node_api::{
     AddOnsContext, FullNodeComponents, NewPayloadError, NodeTypes, PayloadTypes, PayloadValidator,
@@ -36,7 +36,7 @@ impl<N> PayloadValidatorBuilder<N> for TaikoEngineValidatorBuilder
 where
     N: FullNodeComponents<Evm = TaikoEvmConfig>,
     N::Types: NodeTypes<
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             ChainSpec = TaikoChainSpec,
             Payload = TaikoEngineTypes,
         >,
@@ -54,7 +54,7 @@ impl<N> EngineValidatorBuilder<N> for TaikoEngineValidatorBuilder
 where
     N: FullNodeComponents<Evm = TaikoEvmConfig>,
     N::Types: NodeTypes<
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             ChainSpec = TaikoChainSpec,
             Payload = TaikoEngineTypes,
         >,
@@ -105,7 +105,7 @@ where
     Types: PayloadTypes<ExecutionData = TaikoExecutionData>,
 {
     /// The block type used by the engine.
-    type Block = Block;
+    type Block = TaikoBlock;
 
     /// Converts the given payload into a sealed block without recovering signatures.
     fn convert_payload_to_block(
@@ -118,6 +118,14 @@ where
 
         // First parse the block.
         let mut block = Into::<ExecutionPayloadV1>::into(execution_payload).try_into_block()?;
+
+        // ExecutionPayloadV1 doesn't have withdrawals field (pre-Shanghai)
+        // For post-Shanghai blocks, we must set withdrawals to empty array
+        // This ensures blocks cached during sync have correct withdrawals field
+        if block.body.withdrawals.is_none() {
+            block.body.withdrawals = Some(Default::default());
+        }
+
         if !taiko_sidecar.tx_hash.is_zero() {
             block.header.transactions_root = taiko_sidecar.tx_hash;
         }

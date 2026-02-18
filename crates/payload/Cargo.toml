@@ -30,7 +30,6 @@ reth-revm = { workspace = true }
 reth-provider = { workspace = true }
 reth-payload-primitives = { workspace = true }
 op-alloy-flz = { workspace = true }
-reth = { workspace = true }
 reth-basic-payload-builder = { workspace = true }
 reth-chainspec = { workspace = true }
 reth-engine-local = { workspace = true }

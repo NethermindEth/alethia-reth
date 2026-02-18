@@ -10,9 +10,7 @@ use async_trait::async_trait;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use reth_db::transaction::DbTx;
 use reth_db_api::{DatabaseError, transaction::DbTxMut};
-use reth_ethereum::{EthPrimitives, TransactionSigned};
 use reth_evm::ConfigureEngineEvm;
-use reth_evm_ethereum::RethReceiptBuilder;
 use reth_node_api::{Block, NodePrimitives};
 use reth_primitives_traits::BlockBody as _;
 use reth_provider::{BlockReaderIdExt, DBProvider, DatabaseProviderFactory, StateProviderFactory};
@@ -28,19 +26,21 @@ use alethia_reth_block::{
     assembler::TaikoBlockAssembler,
     config::TaikoNextBlockEnvAttributes,
     factory::TaikoBlockExecutorFactory,
+    receipt_builder::TaikoReceiptBuilder,
     tx_selection::{
         DEFAULT_DA_ZLIB_GUARD_BYTES, SelectionOutcome, TxSelectionConfig,
         select_and_execute_pool_transactions,
     },
 };
 use alethia_reth_chainspec::spec::TaikoChainSpec;
-use alethia_reth_consensus::validation::ANCHOR_V4_SELECTOR;
+use alethia_reth_consensus::{transaction::TaikoTxEnvelope, validation::ANCHOR_V4_SELECTOR};
 use alethia_reth_db::model::{
     BatchToLastBlock, STORED_L1_HEAD_ORIGIN_KEY, StoredL1HeadOriginTable, StoredL1OriginTable,
 };
 use alethia_reth_evm::factory::TaikoEvmFactory;
 use alethia_reth_primitives::{
-    decode_shasta_proposal_id, engine::types::TaikoExecutionData, payload::attributes::RpcL1Origin,
+    TaikoPrimitives, decode_shasta_proposal_id, engine::types::TaikoExecutionData,
+    payload::attributes::RpcL1Origin,
 };
 
 /// A pre-built transaction list that contains the mempool content.
@@ -390,7 +390,7 @@ where
 impl<Pool, Eth, Evm, Provider> TaikoAuthExtApiServer<RpcTransaction<Eth::Network>>
     for TaikoAuthExt<Pool, Eth, Evm, Provider>
 where
-    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TransactionSigned>> + 'static,
+    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TaikoTxEnvelope>> + 'static,
     Eth: RpcConvert<Primitives: NodePrimitives<SignedTx = PoolConsensusTx<Pool>>> + 'static,
     Provider: DatabaseProviderFactory
         + BlockReaderIdExt<Header = alloy_consensus::Header>
@@ -398,10 +398,10 @@ where
         + 'static,
     Evm: ConfigureEngineEvm<
             TaikoExecutionData,
-            Primitives = EthPrimitives,
+            Primitives = TaikoPrimitives,
             NextBlockEnvCtx = TaikoNextBlockEnvAttributes,
             BlockExecutorFactory = TaikoBlockExecutorFactory<
-                RethReceiptBuilder,
+                TaikoReceiptBuilder,
                 Arc<TaikoChainSpec>,
                 TaikoEvmFactory,
             >,

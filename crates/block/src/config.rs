@@ -8,12 +8,10 @@ use alloy_hardforks::EthereumHardforks;
 use alloy_primitives::Bytes;
 use alloy_rpc_types_eth::Withdrawals;
 use reth_chainspec::EthChainSpec;
-use reth_ethereum::EthPrimitives;
 use reth_ethereum_forks::Hardforks;
 #[cfg(feature = "net")]
 use reth_evm::{ConfigureEngineEvm, ExecutableTxIterator};
 use reth_evm::{ConfigureEvm, EvmEnv, EvmEnvFor};
-use reth_evm_ethereum::RethReceiptBuilder;
 #[cfg(feature = "net")]
 use reth_payload_primitives::ExecutionPayload;
 use reth_primitives::{BlockTy, SealedBlock, SealedHeader};
@@ -28,9 +26,11 @@ use reth_storage_errors::any::AnyError;
 use crate::{
     assembler::TaikoBlockAssembler,
     factory::{TaikoBlockExecutionCtx, TaikoBlockExecutorFactory},
+    receipt_builder::TaikoReceiptBuilder,
 };
 use alethia_reth_chainspec::{hardfork::TaikoHardfork, spec::TaikoChainSpec};
 use alethia_reth_evm::{factory::TaikoEvmFactory, spec::TaikoSpecId};
+use alethia_reth_primitives::TaikoPrimitives;
 #[cfg(feature = "net")]
 use alethia_reth_primitives::engine::types::TaikoExecutionData;
 
@@ -74,7 +74,7 @@ impl TaikoEvmConfig {
         Self {
             block_assembler: TaikoBlockAssembler::new(chain_spec.clone()),
             executor_factory: TaikoBlockExecutorFactory::new(
-                RethReceiptBuilder::default(),
+                TaikoReceiptBuilder::default(),
                 chain_spec,
                 evm_factory,
             ),
@@ -90,7 +90,7 @@ impl TaikoEvmConfig {
 
 impl ConfigureEvm for TaikoEvmConfig {
     /// The primitives type used by the EVM.
-    type Primitives = EthPrimitives;
+    type Primitives = TaikoPrimitives;
     /// The error type that is returned by [`Self::next_evm_env`].
     type Error = AnyError;
     /// Context required for configuring next block environment.
@@ -99,7 +99,7 @@ impl ConfigureEvm for TaikoEvmConfig {
     type NextBlockEnvCtx = TaikoNextBlockEnvAttributes;
     /// Configured [`BlockExecutorFactory`], contains [`EvmFactory`] internally.
     type BlockExecutorFactory =
-        TaikoBlockExecutorFactory<RethReceiptBuilder, Arc<TaikoChainSpec>, TaikoEvmFactory>;
+        TaikoBlockExecutorFactory<TaikoReceiptBuilder, Arc<TaikoChainSpec>, TaikoEvmFactory>;
     /// The assembler to build a Taiko block.
     type BlockAssembler = TaikoBlockAssembler;
 
