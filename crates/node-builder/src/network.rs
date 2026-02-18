@@ -1,16 +1,12 @@
 #![cfg_attr(not(test), deny(missing_docs, clippy::missing_docs_in_private_items))]
 #![cfg_attr(test, allow(missing_docs, clippy::missing_docs_in_private_items))]
-//! Taiko network builder wiring for `reth` node composition.
-use reth::{
-    network::{EthNetworkPrimitives, NetworkHandle, PeersInfo},
-    transaction_pool::{PoolTransaction, TransactionPool},
-};
+use alethia_reth_chainspec::spec::TaikoChainSpec;
 use reth_ethereum::{EthPrimitives, PooledTransactionVariant};
+use reth_network::{EthNetworkPrimitives, NetworkHandle, PeersInfo};
 use reth_node_api::{FullNodeTypes, NodeTypes, TxTy};
 use reth_node_builder::{BuilderContext, components::NetworkBuilder};
+use reth_transaction_pool::{PoolTransaction, TransactionPool};
 use tracing::info;
-
-use alethia_reth_chainspec::spec::TaikoChainSpec;
 
 /// A basic Taiko network builder service.
 #[derive(Debug, Default, Clone, Copy)]

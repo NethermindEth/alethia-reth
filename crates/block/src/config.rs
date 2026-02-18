@@ -2,6 +2,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 use alloy_consensus::{BlockHeader, Header};
+#[cfg(feature = "net")]
 use alloy_eips::Decodable2718;
 use alloy_hardforks::EthereumHardforks;
 use alloy_primitives::Bytes;
@@ -10,13 +11,12 @@ use reth_chainspec::EthChainSpec;
 use reth_ethereum::EthPrimitives;
 use reth_ethereum_forks::Hardforks;
 #[cfg(feature = "net")]
-use reth_evm::ConfigureEngineEvm;
-use reth_evm::{ConfigureEvm, EvmEnv, EvmEnvFor, ExecutableTxIterator, ExecutionCtxFor};
+use reth_evm::{ConfigureEngineEvm, ExecutableTxIterator};
+use reth_evm::{ConfigureEvm, EvmEnv, EvmEnvFor};
 use reth_evm_ethereum::RethReceiptBuilder;
 #[cfg(feature = "net")]
 use reth_payload_primitives::ExecutionPayload;
 use reth_primitives::{BlockTy, SealedBlock, SealedHeader};
-use reth_primitives_traits::{SignedTransaction, TxTy, constants::MAX_TX_GAS_LIMIT_OSAKA};
 use reth_revm::{
     context::{BlockEnv, CfgEnv},
     primitives::{Address, B256, U256},
@@ -63,7 +63,7 @@ pub struct TaikoEvmConfig {
 impl TaikoEvmConfig {
     /// Creates a new Taiko EVM configuration with the given chain spec and extra context.
     pub fn new(chain_spec: Arc<TaikoChainSpec>) -> Self {
-        Self::new_with_evm_factory(chain_spec, TaikoEvmFactory)
+        Self::new_with_evm_factory(chain_spec, TaikoEvmFactory::default())
     }
 
     /// Creates a new Taiko EVM configuration with the given chain spec and EVM factory.
@@ -229,7 +229,8 @@ impl ConfigureEngineEvm<TaikoExecutionData> for TaikoEvmConfig {
         }
 
         if self.chain_spec().is_osaka_active_at_timestamp(timestamp) {
-            cfg_env.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
+            cfg_env.tx_gas_limit_cap =
+                Some(reth_primitives_traits::constants::MAX_TX_GAS_LIMIT_OSAKA);
         }
 
         let block_env = BlockEnv {
@@ -250,7 +251,7 @@ impl ConfigureEngineEvm<TaikoExecutionData> for TaikoEvmConfig {
     fn context_for_payload<'a>(
         &self,
         payload: &'a TaikoExecutionData,
-    ) -> Result<ExecutionCtxFor<'a, Self>, Self::Error> {
+    ) -> Result<reth_evm::ExecutionCtxFor<'a, Self>, Self::Error> {
         Ok(TaikoBlockExecutionCtx {
             parent_hash: payload.parent_hash(),
             parent_beacon_block_root: payload.parent_beacon_block_root(),
@@ -268,10 +269,11 @@ impl ConfigureEngineEvm<TaikoExecutionData> for TaikoEvmConfig {
     ) -> Result<impl ExecutableTxIterator<Self>, Self::Error> {
         let txs = payload.execution_payload.transactions.clone().unwrap_or_default();
         let convert = |tx: Bytes| {
-            let tx =
-                TxTy::<Self::Primitives>::decode_2718_exact(tx.as_ref()).map_err(AnyError::new)?;
-            let signer = tx.try_recover().map_err(AnyError::new)?;
-            Ok::<_, AnyError>(tx.with_signer(signer))
+            let tx = reth_primitives::TxTy::<Self::Primitives>::decode_2718_exact(tx.as_ref())
+                .map_err(AnyError::new)?;
+            let signer = reth_primitives_traits::SignedTransaction::try_recover(&tx)
+                .map_err(AnyError::new)?;
+            Ok::<_, AnyError>(reth_primitives_traits::SignedTransaction::with_signer(tx, signer))
         };
 
         Ok((txs, convert))

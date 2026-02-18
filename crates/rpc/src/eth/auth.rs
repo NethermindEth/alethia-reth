@@ -8,23 +8,18 @@ use alloy_json_rpc::RpcObject;
 use alloy_primitives::{Bytes, U256};
 use async_trait::async_trait;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use reth::{
-    revm::primitives::Address,
-    transaction_pool::{PoolConsensusTx, PoolTransaction, TransactionPool},
-};
-use reth_db_api::{
-    DatabaseError,
-    transaction::{DbTx, DbTxMut},
-};
+use reth_db::transaction::DbTx;
+use reth_db_api::{DatabaseError, transaction::DbTxMut};
 use reth_ethereum::{EthPrimitives, TransactionSigned};
 use reth_evm::ConfigureEngineEvm;
 use reth_evm_ethereum::RethReceiptBuilder;
 use reth_node_api::{Block, NodePrimitives};
 use reth_primitives_traits::BlockBody as _;
 use reth_provider::{BlockReaderIdExt, DBProvider, DatabaseProviderFactory, StateProviderFactory};
-use reth_revm::{State, database::StateProviderDatabase};
+use reth_revm::{State, database::StateProviderDatabase, primitives::Address};
 use reth_rpc_eth_api::{RpcConvert, RpcTransaction};
 use reth_rpc_eth_types::EthApiError;
+use reth_transaction_pool::{PoolConsensusTx, PoolTransaction, TransactionPool};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -631,6 +626,7 @@ mod tests {
     use std::{path::PathBuf, sync::Arc};
 
     #[test]
+    #[cfg(feature = "serde")]
     /// Ensures `txPoolContent` accepts a camelCase object payload.
     fn tx_pool_content_params_deserialize_from_camel_case() {
         let value = serde_json::json!({
@@ -656,6 +652,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     /// Ensures `txPoolContentWithMinTip` accepts a camelCase object payload.
     fn tx_pool_content_with_min_tip_params_deserialize_from_camel_case() {
         let value = serde_json::json!({
@@ -717,7 +714,7 @@ mod tests {
                 .with_default_tables()
                 .build()
                 .expect("failed to create test RocksDB provider"),
-            reth::tasks::Runtime::default(),
+            reth_tasks::Runtime::default(),
         )
         .expect("failed to create test provider factory")
     }

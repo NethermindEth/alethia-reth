@@ -42,11 +42,13 @@ impl<CTX: ContextTr, INSP, P> TaikoEvm<CTX, INSP, P> {
         base_fee_share_pctg: u64,
         anchor_caller_address: Address,
         anchor_caller_nonce: u64,
+        treasury_address: Option<Address>,
     ) {
         self.extra_execution_ctx = Some(TaikoEvmExtraExecutionCtx {
             base_fee_share_pctg,
             anchor_caller_address,
             anchor_caller_nonce,
+            treasury_address,
         });
     }
 }
@@ -158,6 +160,9 @@ pub struct TaikoEvmExtraExecutionCtx {
     anchor_caller_address: Address,
     /// Anchor caller nonce used to detect anchor transactions.
     anchor_caller_nonce: u64,
+    /// The treasury address to use for the transaction. If None, the default treasury address will
+    /// be used.
+    treasury_address: Option<Address>,
 }
 
 impl TaikoEvmExtraExecutionCtx {
@@ -166,8 +171,9 @@ impl TaikoEvmExtraExecutionCtx {
         base_fee_share_pctg: u64,
         anchor_caller_address: Address,
         anchor_caller_nonce: u64,
+        treasury_address: Option<Address>,
     ) -> Self {
-        Self { base_fee_share_pctg, anchor_caller_address, anchor_caller_nonce }
+        Self { base_fee_share_pctg, anchor_caller_address, anchor_caller_nonce, treasury_address }
     }
 
     /// Returns the base fee share percentage.
@@ -186,6 +192,12 @@ impl TaikoEvmExtraExecutionCtx {
     #[inline]
     pub fn anchor_caller_nonce(&self) -> u64 {
         self.anchor_caller_nonce
+    }
+
+    /// Returns the treasury address.
+    #[inline]
+    pub fn treasury_address(&self) -> Option<Address> {
+        self.treasury_address
     }
 }
 

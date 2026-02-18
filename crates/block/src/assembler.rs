@@ -9,11 +9,10 @@ use alloy_primitives::logs_bloom;
 use alloy_rpc_types_eth::Withdrawals;
 use reth_ethereum::{Receipt, TransactionSigned};
 use reth_evm::{
-    block::{BlockExecutionError, BlockExecutorFactory},
+    block::{BlockExecutionError, BlockExecutionResult, BlockExecutorFactory},
     execute::{BlockAssembler, BlockAssemblerInput},
 };
 use reth_evm_ethereum::EthBlockAssembler;
-use reth_execution_types::BlockExecutionResult;
 use reth_primitives::Block;
 use reth_revm::context::Block as _;
 

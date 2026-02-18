@@ -1,12 +1,5 @@
-use std::sync::Arc;
-
 use alloy_consensus::Transaction;
 use alloy_eips::eip4844::BYTES_PER_BLOB;
-use reth::{
-    api::{PayloadBuilderAttributes, PayloadBuilderError},
-    providers::{ChainSpecProvider, StateProviderFactory},
-    revm::{State, cancelled::CancelOnDrop, database::StateProviderDatabase, primitives::U256},
-};
 use reth_basic_payload_builder::{
     BuildArguments, BuildOutcome, MissingPayloadBehaviour, PayloadBuilder, PayloadConfig,
 };
@@ -19,7 +12,13 @@ use reth_evm::{
     execute::{BlockBuilder, BlockBuilderOutcome},
 };
 use reth_evm_ethereum::RethReceiptBuilder;
+use reth_payload_primitives::{PayloadBuilderAttributes, PayloadBuilderError};
 use reth_primitives::{Header as RethHeader, Recovered};
+use reth_provider::{ChainSpecProvider, StateProviderFactory};
+use reth_revm::{
+    State, cancelled::CancelOnDrop, database::StateProviderDatabase, primitives::U256,
+};
+use std::sync::Arc;
 use tracing::{debug, trace, warn};
 
 use alethia_reth_block::{

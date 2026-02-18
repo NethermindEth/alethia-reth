@@ -3,11 +3,13 @@
 //! Taiko chain-spec presets and genesis helpers.
 use std::sync::{Arc, LazyLock};
 
-use alloy_primitives::{B256, b256};
+use alloy_primitives::B256;
 use reth_chainspec::{ChainSpec, make_genesis_header};
 use reth_ethereum_forks::ChainHardforks;
-use reth_primitives::SealedHeader;
-use reth_revm::primitives::U256;
+use reth_primitives_traits::SealedHeader;
+use reth_revm::primitives::{U256, b256};
+
+pub use reth_chainspec;
 
 use crate::{
     hardfork::{

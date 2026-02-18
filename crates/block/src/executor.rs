@@ -9,12 +9,11 @@ use alloy_primitives::{Address, Bytes, Uint};
 use reth_evm::{
     Evm, OnStateHook,
     block::{
-        BlockExecutionError, BlockExecutor, BlockValidationError, ExecutableTx,
-        InternalBlockExecutionError, StateChangeSource, SystemCaller,
+        BlockExecutionError, BlockExecutionResult, BlockExecutor, BlockValidationError,
+        ExecutableTx, InternalBlockExecutionError, StateChangeSource, SystemCaller,
     },
     eth::receipt_builder::ReceiptBuilderCtx,
 };
-use reth_execution_types::BlockExecutionResult;
 use reth_primitives::Log;
 use reth_revm::{
     State,
