@@ -163,6 +163,7 @@ dependencies = [
  "alethia-reth-chainspec",
  "alethia-reth-evm",
  "alloy-consensus",
+ "alloy-eips",
  "alloy-hardforks",
  "alloy-primitives",
  "alloy-sol-types",
@@ -170,10 +171,9 @@ dependencies = [
  "reth-consensus",
  "reth-consensus-common",
  "reth-ethereum",
- "reth-ethereum-consensus",
- "reth-execution-types",
- "reth-primitives",
+ "reth-evm",
  "reth-primitives-traits",
+ "tracing",
 ]
 
 [[package]]
