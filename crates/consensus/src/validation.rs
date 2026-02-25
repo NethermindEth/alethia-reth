@@ -53,6 +53,16 @@ pub trait TaikoBlockReader: Send + Sync + Debug {
     fn block_timestamp_by_hash(&self, hash: B256) -> Option<u64>;
 }
 
+/// A no-op implementation of [`TaikoBlockReader`] that always returns `None`.
+#[derive(Debug)]
+struct NoopTaikoBlockReader;
+
+impl TaikoBlockReader for NoopTaikoBlockReader {
+    fn block_timestamp_by_hash(&self, _hash: B256) -> Option<u64> {
+        None
+    }
+}
+
 /// Taiko consensus implementation.
 ///
 /// Provides basic checks as outlined in the execution specs.

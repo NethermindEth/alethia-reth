@@ -737,7 +737,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "auto_impl",
- "dashmap",
+ "dashmap 6.1.0",
  "either",
  "futures",
  "futures-utils-wasm",
@@ -1913,7 +1913,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "cow-utils",
- "dashmap",
+ "dashmap 6.1.0",
  "dynify",
  "fast-float2",
  "float16",
@@ -2795,6 +2795,19 @@ dependencies = [
  "darling_core 0.23.0",
  "quote",
  "syn 2.0.110",
+]
+
+[[package]]
+name = "dashmap"
+version = "5.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
+dependencies = [
+ "cfg-if",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
 ]
 
 [[package]]
@@ -7213,7 +7226,7 @@ version = "1.11.1"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.1#bef3d7b4d1da937fcccc9bbd6f8bd93e16380dc7"
 dependencies = [
  "alloy-primitives",
- "dashmap",
+ "dashmap 6.1.0",
  "data-encoding",
  "enr",
  "hickory-resolver",
@@ -7894,7 +7907,7 @@ source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.1#bef3d7b4d1da937fcc
 dependencies = [
  "bitflags 2.10.0",
  "byteorder",
- "dashmap",
+ "dashmap 6.1.0",
  "derive_more",
  "parking_lot",
  "reth-mdbx-sys",
@@ -8465,7 +8478,7 @@ dependencies = [
  "auto_impl",
  "byteorder",
  "bytes",
- "dashmap",
+ "dashmap 6.1.0",
  "derive_more",
  "modular-bitfield",
  "once_cell",
@@ -10170,7 +10183,7 @@ checksum = "91d129178576168c589c9ec973feedf7d3126c01ac2bf08795109aa35b69fb8f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.113",
+ "syn 2.0.110",
 ]
 
 [[package]]
