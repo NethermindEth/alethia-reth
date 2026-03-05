@@ -271,6 +271,8 @@ mod test {
             block_metadata: create_block_metadata(timestamp, tx_list),
             l1_origin: default_l1_origin(),
             anchor_transaction: None,
+            signal_slots: None,
+            max_anchor_block_number: None,
         }
     }
 
