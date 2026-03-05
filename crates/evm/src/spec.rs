@@ -17,13 +17,17 @@ pub enum TaikoSpecId {
     PACAYA,
     /// Shasta hard fork for the Taiko network
     SHASTA,
+    /// RealTime hard fork for the Taiko network
+    REALTIME,
 }
 
 impl TaikoSpecId {
     /// Converts the [`TaikoSpecId`] into a [`SpecId`].
     pub const fn into_eth_spec(self) -> SpecId {
         match self {
-            Self::GENESIS | Self::ONTAKE | Self::PACAYA | Self::SHASTA => SpecId::SHANGHAI,
+            Self::GENESIS | Self::ONTAKE | Self::PACAYA | Self::SHASTA | Self::REALTIME => {
+                SpecId::SHANGHAI
+            }
         }
     }
 
@@ -49,6 +53,7 @@ impl FromStr for TaikoSpecId {
             name::ONTAKE => Ok(TaikoSpecId::ONTAKE),
             name::PACAYA => Ok(TaikoSpecId::PACAYA),
             name::SHASTA => Ok(TaikoSpecId::SHASTA),
+            name::REALTIME => Ok(TaikoSpecId::REALTIME),
             _ => Err(UnknownHardfork),
         }
     }
@@ -62,6 +67,7 @@ impl From<TaikoSpecId> for &'static str {
             TaikoSpecId::ONTAKE => name::ONTAKE,
             TaikoSpecId::PACAYA => name::PACAYA,
             TaikoSpecId::SHASTA => name::SHASTA,
+            TaikoSpecId::REALTIME => name::REALTIME,
         }
     }
 }
@@ -76,6 +82,8 @@ pub mod name {
     pub const PACAYA: &str = "Pacaya";
     /// String name for `TaikoSpecId::SHASTA`.
     pub const SHASTA: &str = "Shasta";
+    /// String name for `TaikoSpecId::REALTIME`.
+    pub const REALTIME: &str = "RealTime";
 }
 
 #[cfg(test)]
@@ -100,6 +108,7 @@ mod tests {
                 (TaikoSpecId::ONTAKE, true),
                 (TaikoSpecId::PACAYA, true),
                 (TaikoSpecId::SHASTA, false),
+                (TaikoSpecId::REALTIME, false),
             ],
         )];
 
