@@ -122,6 +122,9 @@ fn extend_with_shared_hardforks(
             },
         ),
         (EthereumHardfork::Shanghai.boxed(), ForkCondition::Timestamp(0)),
+        // (EthereumHardfork::Cancun.boxed(), ForkCondition::Timestamp(1)),
+        // (EthereumHardfork::Prague.boxed(), ForkCondition::Timestamp(1)),
+        // (EthereumHardfork::Osaka.boxed(), ForkCondition::Timestamp(1)),
     ];
 
     shared_hardforks.extend(hardforks);
