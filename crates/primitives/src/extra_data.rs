@@ -3,7 +3,9 @@
 /// Minimum number of bytes required for Shasta extra data.
 pub const SHASTA_EXTRA_DATA_LEN: usize = 7;
 
-/// Returns the base fee sharing percentage encoded in Shasta extra data.
+/// Returns the base fee sharing percentage encoded in Shasta/RealTime extra data (byte 0).
+///
+/// Both Shasta and RealTime use identical encoding for this field.
 pub fn decode_shasta_basefee_sharing_pctg(extra: &[u8]) -> u8 {
     extra.first().copied().unwrap_or_default()
 }

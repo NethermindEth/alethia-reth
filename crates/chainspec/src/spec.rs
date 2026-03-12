@@ -167,6 +167,12 @@ pub trait TaikoDevnetConfigExt {
     fn clone_with_devnet_shasta_timestamp(&self, timestamp: u64) -> Option<Self>
     where
         Self: Sized;
+
+    /// Returns a cloned [`TaikoChainSpec`] with the RealTime hardfork activation timestamp updated
+    /// when the chainspec targets the Taiko devnet. Returns `None` for other networks.
+    fn clone_with_devnet_realtime_timestamp(&self, timestamp: u64) -> Option<Self>
+    where
+        Self: Sized;
 }
 
 impl TaikoDevnetConfigExt for TaikoChainSpec {
@@ -182,6 +188,24 @@ impl TaikoDevnetConfigExt for TaikoChainSpec {
 
         let mut cloned = self.clone();
         cloned.inner.hardforks.insert(TaikoHardfork::Shasta, ForkCondition::Timestamp(timestamp));
+        Some(cloned)
+    }
+
+    /// Returns a cloned [`TaikoChainSpec`] with the RealTime hardfork activation timestamp updated
+    /// when the chainspec targets the Taiko devnet. Returns `None` for other networks.
+    fn clone_with_devnet_realtime_timestamp(&self, timestamp: u64) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if self.genesis_hash() != TAIKO_DEVNET_GENESIS_HASH {
+            return None;
+        }
+
+        let mut cloned = self.clone();
+        cloned
+            .inner
+            .hardforks
+            .insert(TaikoHardfork::RealTime, ForkCondition::Timestamp(timestamp));
         Some(cloned)
     }
 }
@@ -214,6 +238,11 @@ pub trait TaikoExecutorSpec: EthExecutorSpec {
     /// timestamp-only condition.
     fn is_shasta_active(&self, timestamp: u64) -> bool {
         self.taiko_fork_activation(TaikoHardfork::Shasta).active_at_timestamp(timestamp)
+    }
+
+    /// Checks if the `RealTime` hardfork is active at the given timestamp.
+    fn is_realtime_active(&self, timestamp: u64) -> bool {
+        self.taiko_fork_activation(TaikoHardfork::RealTime).active_at_timestamp(timestamp)
     }
 }
 

@@ -33,6 +33,7 @@ sol! {
     function anchorV2(uint64, bytes32, uint32, (uint8, uint8, uint32, uint64, uint32)) external;
     function anchorV3(uint64, bytes32, uint32, (uint8, uint8, uint32, uint64, uint32), bytes32[]) external;
     function anchorV4((uint48, bytes32, bytes32)) external;
+    function anchorV4WithSignalSlots((uint48, bytes32, bytes32), bytes32[]) external;
 }
 
 /// Anchor / system transaction call selectors.
@@ -43,6 +44,9 @@ pub const ANCHOR_V2_SELECTOR: &[u8; 4] = &anchorV2Call::SELECTOR;
 pub const ANCHOR_V3_SELECTOR: &[u8; 4] = &anchorV3Call::SELECTOR;
 /// Selector for the Shasta-era `anchorV4` transaction.
 pub const ANCHOR_V4_SELECTOR: &[u8; 4] = &anchorV4Call::SELECTOR;
+/// Selector for the RealTime-era `anchorV4WithSignalSlots` transaction.
+pub const ANCHOR_V4_WITH_SIGNAL_SLOTS_SELECTOR: &[u8; 4] =
+    &anchorV4WithSignalSlotsCall::SELECTOR;
 
 /// The gas limit for the anchor transactions before Pacaya hardfork.
 pub const ANCHOR_V1_V2_GAS_LIMIT: u64 = 250_000;
@@ -320,7 +324,9 @@ pub fn validate_anchor_transaction(
     ctx: AnchorValidationContext,
 ) -> Result<(), ConsensusError> {
     // Ensure the input data starts with one of the anchor selectors.
-    if chain_spec.is_shasta_active(ctx.timestamp) {
+    if chain_spec.is_realtime_active(ctx.timestamp) {
+        validate_input_selector(anchor_transaction.input(), ANCHOR_V4_WITH_SIGNAL_SLOTS_SELECTOR)?;
+    } else if chain_spec.is_shasta_active(ctx.timestamp) {
         validate_input_selector(anchor_transaction.input(), ANCHOR_V4_SELECTOR)?;
     } else if chain_spec.is_pacaya_active_at_block(ctx.block_number) {
         validate_input_selector(anchor_transaction.input(), ANCHOR_V3_SELECTOR)?;
