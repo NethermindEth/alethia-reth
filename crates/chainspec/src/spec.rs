@@ -202,10 +202,7 @@ impl TaikoDevnetConfigExt for TaikoChainSpec {
         }
 
         let mut cloned = self.clone();
-        cloned
-            .inner
-            .hardforks
-            .insert(TaikoHardfork::RealTime, ForkCondition::Timestamp(timestamp));
+        cloned.inner.hardforks.insert(TaikoHardfork::RealTime, ForkCondition::Timestamp(timestamp));
         Some(cloned)
     }
 }

@@ -38,19 +38,13 @@ pub struct TaikoPayloadAttributes {
     /// Signal slots to relay via the anchor transaction (RealTime fork).
     ///
     /// `None` or empty = Shasta/pre-RealTime block; non-empty = RealTime first block.
-    #[cfg_attr(
-        feature = "serde",
-        serde(skip_serializing_if = "Option::is_none", default)
-    )]
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none", default))]
     pub signal_slots: Option<Vec<B256>>,
 
     /// The highest L1 block number the L2 derivation may reference (RealTime fork).
     ///
     /// Required when `signal_slots` is present; ignored for pre-RealTime blocks.
-    #[cfg_attr(
-        feature = "serde",
-        serde(skip_serializing_if = "Option::is_none", default)
-    )]
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none", default))]
     pub max_anchor_block_number: Option<u64>,
 }
 

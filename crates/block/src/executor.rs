@@ -112,8 +112,8 @@ where
 
             // Decode the base fee share percentage from the block's extra data.
             let base_fee_share_pgtg =
-                if self.spec.is_realtime_active(self.evm.block().timestamp().to())
-                    || self.spec.is_shasta_active(self.evm.block().timestamp().to())
+                if self.spec.is_realtime_active(self.evm.block().timestamp().to()) ||
+                    self.spec.is_shasta_active(self.evm.block().timestamp().to())
                 {
                     decode_shasta_basefee_sharing_pctg(self.ctx.extra_data.as_ref()) as u64
                 } else if self.spec.is_ontake_active_at_block(self.evm.block().number().to()) {

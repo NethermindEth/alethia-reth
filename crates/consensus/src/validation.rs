@@ -45,8 +45,7 @@ pub const ANCHOR_V3_SELECTOR: &[u8; 4] = &anchorV3Call::SELECTOR;
 /// Selector for the Shasta-era `anchorV4` transaction.
 pub const ANCHOR_V4_SELECTOR: &[u8; 4] = &anchorV4Call::SELECTOR;
 /// Selector for the RealTime-era `anchorV4WithSignalSlots` transaction.
-pub const ANCHOR_V4_WITH_SIGNAL_SLOTS_SELECTOR: &[u8; 4] =
-    &anchorV4WithSignalSlotsCall::SELECTOR;
+pub const ANCHOR_V4_WITH_SIGNAL_SLOTS_SELECTOR: &[u8; 4] = &anchorV4WithSignalSlotsCall::SELECTOR;
 
 /// The gas limit for the anchor transactions before Pacaya hardfork.
 pub const ANCHOR_V1_V2_GAS_LIMIT: u64 = 250_000;
