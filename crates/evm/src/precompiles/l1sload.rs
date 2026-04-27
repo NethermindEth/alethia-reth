@@ -1,6 +1,19 @@
+//! L1SLOAD precompile (RIP-7728, address `0x10001`).
+//!
+//! **Global-state invariant.** The storage cache, fetcher, anchor / l1-origin context, and
+//! RPC-served-calls set are process-global `LazyLock<Mutex<_>>`. They are safe only when the
+//! host drives the precompile single-threaded with one `(anchor, l1origin)` context at a time —
+//! the normal preflight and ZK-guest pattern. Running two different contexts concurrently will
+//! silently cross-contaminate cache hits.
+//!
+//! **Cache lifecycle.** No automatic eviction. The caller (surge-raiko) must invoke
+//! [`clear_l1_storage`] (or the sibling [`crate::precompiles::l1staticcall::clear_l1_staticcall_cache`])
+//! at the top of every new block / batch iteration. Tests use `#[serial]` to serialize global-state
+//! mutations.
+
 use std::{
     collections::{HashMap, HashSet},
-    sync::{LazyLock, Mutex},
+    sync::{Arc, LazyLock, Mutex},
 };
 
 use alloy_primitives::{Address, B256, Bytes, U256};
@@ -36,7 +49,11 @@ static CURRENT_L1_ORIGIN_BLOCK_ID: LazyLock<Mutex<Option<u64>>> =
 /// Callback function type for fetching L1 storage values via RPC.
 /// Set by surge-raiko during preflight (has network access), None during ZK proving.
 /// Arguments: (contract_address, storage_key, block_number_u64) -> storage_value
-type L1StorageFetcher = Box<dyn Fn(Address, B256, u64) -> Result<B256, String> + Send + Sync>;
+///
+/// Wrapped in `Arc` so the caller can clone the pointer out of the global mutex before
+/// invoking the (slow) RPC. Keeps concurrent `set_*`/`clear_*` callers unblocked on lock
+/// wait time and avoids poisoning the mutex if the fetcher panics.
+type L1StorageFetcher = Arc<dyn Fn(Address, B256, u64) -> Result<B256, String> + Send + Sync>;
 
 /// Live L1 RPC fetcher for handling cache misses on indirect L1SLOAD calls.
 static L1_RPC_FETCHER: LazyLock<Mutex<Option<L1StorageFetcher>>> =
@@ -55,7 +72,7 @@ pub fn set_anchor_block_id(anchor_block_id: u64) {
 }
 
 /// Reads the current anchor block ID from global context.
-fn get_anchor_block_id() -> Option<u64> {
+pub(crate) fn get_anchor_block_id() -> Option<u64> {
     *CURRENT_ANCHOR_BLOCK_ID.lock().expect("CURRENT_ANCHOR_BLOCK_ID mutex poisoned")
 }
 
@@ -67,7 +84,7 @@ pub fn set_l1_origin_block_id(l1_origin_block_id: u64) {
 }
 
 /// Reads the current L1 origin block ID from global context.
-fn get_l1_origin_block_id() -> Option<u64> {
+pub(crate) fn get_l1_origin_block_id() -> Option<u64> {
     *CURRENT_L1_ORIGIN_BLOCK_ID.lock().expect("CURRENT_L1_ORIGIN_BLOCK_ID mutex poisoned")
 }
 
@@ -96,7 +113,7 @@ pub fn clear_l1_storage() {
 pub fn set_l1_rpc_fetcher(
     fetcher: impl Fn(Address, B256, u64) -> Result<B256, String> + Send + Sync + 'static,
 ) {
-    *L1_RPC_FETCHER.lock().expect("L1_RPC_FETCHER mutex poisoned") = Some(Box::new(fetcher));
+    *L1_RPC_FETCHER.lock().expect("L1_RPC_FETCHER mutex poisoned") = Some(Arc::new(fetcher));
 }
 
 /// Clear the L1 RPC fetcher (disables live RPC fallback).
@@ -144,6 +161,9 @@ pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
     let storage_key = B256::from_slice(&input[20..52]);
     let block_number = B256::from_slice(&input[52..84]);
 
+    // Block-range validation uses only `l1_origin_block_id` for the `[l1origin − 256, l1origin]`
+    // window. `anchor_block_id` participates only in the `l1origin < anchor` invariant check
+    // and is *not* a bound of the lookback window.
     let anchor_block_id = match get_anchor_block_id() {
         Some(id) => id,
         None => {
@@ -169,7 +189,7 @@ pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
         .map_err(|_| PrecompileError::Other("Block number too large".into()))?;
 
     if requested_block > l1_origin_block_id {
-        warn!(
+        debug!(
             "L1SLOAD: rejected block {} > l1origin {} (anchor={})",
             requested_block, l1_origin_block_id, anchor_block_id
         );
@@ -179,7 +199,7 @@ pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
     }
 
     if l1_origin_block_id - requested_block > L1SLOAD_MAX_BLOCK_LOOKBACK {
-        warn!(
+        debug!(
             "L1SLOAD: rejected block {} too old (l1origin={}, lookback={})",
             requested_block, l1_origin_block_id, L1SLOAD_MAX_BLOCK_LOOKBACK
         );
@@ -188,41 +208,43 @@ pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
         ));
     }
 
-    let value =
-        if let Some(cached) = get_l1_storage_value(contract_address, storage_key, block_number) {
-            trace!(
-                "L1SLOAD: cache hit contract={:?} key={:?} block={}",
+    let value = if let Some(cached) =
+        get_l1_storage_value(contract_address, storage_key, block_number)
+    {
+        trace!(
+            "L1SLOAD: cache hit contract={:?} key={:?} block={}",
+            contract_address, storage_key, requested_block
+        );
+        cached
+    } else {
+        // Clone the Arc out of the lock so we can drop the guard before the (slow) RPC runs.
+        let fetcher =
+            L1_RPC_FETCHER.lock().expect("L1_RPC_FETCHER mutex poisoned").as_ref().map(Arc::clone);
+        if let Some(fetcher) = fetcher {
+            debug!(
+                "L1SLOAD: RPC fallback contract={:?} key={:?} block={}",
                 contract_address, storage_key, requested_block
             );
-            cached
+            let fetched = fetcher(contract_address, storage_key, requested_block)
+                .map_err(|e| PrecompileError::Other(format!("L1 RPC error: {e}").into()))?;
+
+            set_l1_storage_value(contract_address, storage_key, block_number, fetched);
+
+            L1_RPC_SERVED_CALLS.lock().expect("L1_RPC_SERVED_CALLS mutex poisoned").insert((
+                contract_address,
+                storage_key,
+                block_number,
+            ));
+
+            fetched
         } else {
-            let fetcher_guard = L1_RPC_FETCHER.lock().expect("L1_RPC_FETCHER mutex poisoned");
-            if let Some(ref fetcher) = *fetcher_guard {
-                debug!(
-                    "L1SLOAD: RPC fallback contract={:?} key={:?} block={}",
-                    contract_address, storage_key, requested_block
-                );
-                let fetched = fetcher(contract_address, storage_key, requested_block)
-                    .map_err(|e| PrecompileError::Other(format!("L1 RPC error: {e}").into()))?;
-                drop(fetcher_guard);
-
-                set_l1_storage_value(contract_address, storage_key, block_number, fetched);
-
-                L1_RPC_SERVED_CALLS.lock().expect("L1_RPC_SERVED_CALLS mutex poisoned").insert((
-                    contract_address,
-                    storage_key,
-                    block_number,
-                ));
-
-                fetched
-            } else {
-                warn!(
-                    "L1SLOAD: cache miss + no RPC — contract={:?} key={:?} block={:?}",
-                    contract_address, storage_key, block_number
-                );
-                return Err(PrecompileError::Other("L1 storage value not found in cache".into()));
-            }
-        };
+            warn!(
+                "L1SLOAD: cache miss + no RPC — contract={:?} key={:?} block={:?}",
+                contract_address, storage_key, block_number
+            );
+            return Err(PrecompileError::Other("L1 storage value not found in cache".into()));
+        }
+    };
 
     let mut output = [0u8; 32];
     output.copy_from_slice(value.as_slice());
@@ -288,7 +310,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_l1sload_fails_without_anchor_block_id() {
+    fn test_l1sload_fails_withoutanchor_block_id() {
         clear_l1_storage();
 
         let input = create_test_input(100);
@@ -470,7 +492,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_anchor_block_id_context() {
+    fn testanchor_block_id_context() {
         clear_l1_storage();
 
         // Verify context is initially empty
