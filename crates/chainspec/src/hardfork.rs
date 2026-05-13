@@ -133,7 +133,10 @@ fn extend_with_shared_hardforks(
             },
         ),
         (EthereumHardfork::Shanghai.boxed(), ForkCondition::Timestamp(0)),
-        // TODO(osaka): enable Cancun/Prague/Osaka when L1 activates them for Taiko.
+        // TODO(osaka): enable Cancun, Prague, Osaka when L1 activates them for Taiko.
+        // (EthereumHardfork::Cancun.boxed(), ForkCondition::Timestamp(1)),
+        // (EthereumHardfork::Prague.boxed(), ForkCondition::Timestamp(1)),
+        // (EthereumHardfork::Osaka.boxed(), ForkCondition::Timestamp(1)),
     ];
 
     shared_hardforks.extend(hardforks);

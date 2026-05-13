@@ -20,6 +20,11 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use reth_revm::precompile::{PrecompileError, PrecompileOutput, PrecompileResult};
 use tracing::{debug, trace, warn};
 
+pub use super::context::{
+    clear_anchor_context, get_anchor_block_id, get_l1_max_anchor_block_id, set_anchor_block_id,
+    set_l1_max_anchor_block_id,
+};
+
 /// Fixed gas cost for an L1SLOAD precompile call.
 const L1SLOAD_FIXED_GAS: u64 = 2000;
 /// Per-load gas cost for each storage slot read.
@@ -40,22 +45,6 @@ type L1StorageCache = HashMap<(Address, B256, B256), B256>;
 static L1_STORAGE_CACHE: LazyLock<Mutex<L1StorageCache>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Current anchor block ID context for L1SLOAD operations (stored as u64 for range checking).
-///
-/// Sourced from the L2 anchor tx's `Checkpoint.blockNumber` field (`anchorV4` in Shasta /
-/// `anchorV4WithSignalSlots` in RealTime). Identical semantics in both forks.
-static CURRENT_ANCHOR_BLOCK_ID: LazyLock<Mutex<Option<u64>>> = LazyLock::new(|| Mutex::new(None));
-/// Current L1 max-anchor block ID context for L1SLOAD operations (upper bound of the
-/// `[N − 256, N]` lookback window).
-///
-/// In Shasta this is the proposal's `originBlockNumber`; in RealTime it's the proposal's
-/// `maxAnchorBlockNumber`. Both fields play the same structural role — an on-chain-verified
-/// L1 block number that anchors the prover's trust window. Renamed from
-/// `CURRENT_L1_ORIGIN_BLOCK_ID` (Shasta-era name) to disambiguate now that two forks contribute the
-/// value.
-static CURRENT_L1_MAX_ANCHOR_BLOCK_ID: LazyLock<Mutex<Option<u64>>> =
-    LazyLock::new(|| Mutex::new(None));
-
 /// Callback function type for fetching L1 storage values via RPC.
 /// Set by surge-raiko during preflight (has network access), None during ZK proving.
 /// Arguments: (contract_address, storage_key, block_number_u64) -> storage_value
@@ -75,31 +64,6 @@ static L1_RPC_FETCHER: LazyLock<Mutex<Option<L1StorageFetcher>>> =
 static L1_RPC_SERVED_CALLS: LazyLock<Mutex<HashSet<(Address, B256, B256)>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
-/// Set the current anchor block ID context
-pub fn set_anchor_block_id(anchor_block_id: u64) {
-    let mut ctx = CURRENT_ANCHOR_BLOCK_ID.lock().expect("CURRENT_ANCHOR_BLOCK_ID mutex poisoned");
-    *ctx = Some(anchor_block_id);
-}
-
-/// Reads the current anchor block ID from global context.
-pub(crate) fn get_anchor_block_id() -> Option<u64> {
-    *CURRENT_ANCHOR_BLOCK_ID.lock().expect("CURRENT_ANCHOR_BLOCK_ID mutex poisoned")
-}
-
-/// Set the L1 max-anchor block ID context (`originBlockNumber` in Shasta or
-/// `maxAnchorBlockNumber` in RealTime — same role).
-pub fn set_l1_max_anchor_block_id(l1_max_anchor_block_id: u64) {
-    let mut ctx = CURRENT_L1_MAX_ANCHOR_BLOCK_ID
-        .lock()
-        .expect("CURRENT_L1_MAX_ANCHOR_BLOCK_ID mutex poisoned");
-    *ctx = Some(l1_max_anchor_block_id);
-}
-
-/// Reads the current L1 max-anchor block ID from global context.
-pub(crate) fn get_l1_max_anchor_block_id() -> Option<u64> {
-    *CURRENT_L1_MAX_ANCHOR_BLOCK_ID.lock().expect("CURRENT_L1_MAX_ANCHOR_BLOCK_ID mutex poisoned")
-}
-
 /// Insert a value into the L1 storage cache.
 pub fn set_l1_storage_value(
     contract_address: Address,
@@ -112,12 +76,14 @@ pub fn set_l1_storage_value(
 }
 
 /// Clear all L1SLOAD state (cache, context, RPC fetcher, tracked calls).
+///
+/// **Caller footgun warning:** this does NOT clear L1STATICCALL state. If the host
+/// switches between batches it must also call `clear_l1_staticcall_cache()`,
+/// `clear_l1_staticcall_rpc_fetcher()`, and `clear_l1_staticcall_rpc_served_calls()`.
+/// The safer one-shot is [`crate::precompiles::clear_all_precompile_state`].
 pub fn clear_l1_storage() {
     L1_STORAGE_CACHE.lock().expect("L1_STORAGE_CACHE mutex poisoned").clear();
-    *CURRENT_ANCHOR_BLOCK_ID.lock().expect("CURRENT_ANCHOR_BLOCK_ID mutex poisoned") = None;
-    *CURRENT_L1_MAX_ANCHOR_BLOCK_ID
-        .lock()
-        .expect("CURRENT_L1_MAX_ANCHOR_BLOCK_ID mutex poisoned") = None;
+    clear_anchor_context();
     clear_l1_rpc_fetcher();
     clear_l1_rpc_served_calls();
 }
@@ -183,14 +149,22 @@ pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
         Some(id) => id,
         None => {
             warn!("L1SLOAD: anchor block ID not set");
-            return Err(PrecompileError::Other("Anchor block ID not set".into()));
+            return Err(PrecompileError::Other(
+                "L1SLOAD context unset (likely L1 precompiles aren't enabled for this fork \
+                 or the host hasn't called set_anchor_block_id for the current block)"
+                    .into(),
+            ));
         }
     };
     let l1_max_anchor_block_id = match get_l1_max_anchor_block_id() {
         Some(id) => id,
         None => {
             warn!("L1SLOAD: L1 max-anchor block ID not set");
-            return Err(PrecompileError::Other("L1 max-anchor block ID not set".into()));
+            return Err(PrecompileError::Other(
+                "L1SLOAD context unset (likely L1 precompiles aren't enabled for this fork \
+                 or the host hasn't called set_l1_max_anchor_block_id for the current block)"
+                    .into(),
+            ));
         }
     };
 
@@ -263,9 +237,8 @@ pub fn l1sload_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
         }
     };
 
-    let mut output = [0u8; 32];
-    output.copy_from_slice(value.as_slice());
-    Ok(PrecompileOutput::new(gas_used, Bytes::from(output)))
+    // `value` is already `B256` (32 bytes); copy straight into a `Bytes`.
+    Ok(PrecompileOutput::new(gas_used, Bytes::copy_from_slice(value.as_slice())))
 }
 
 #[cfg(test)]
@@ -627,7 +600,7 @@ mod tests {
         // Context should be cleared, so call must fail before any fetcher usage.
         let err = l1sload_run(&input, SUFFICIENT_GAS).expect_err("Context should be cleared");
         assert!(
-            format!("{err:?}").contains("Anchor block ID not set"),
+            format!("{err:?}").contains("L1SLOAD context unset"),
             "Expected missing-anchor context error, got {err:?}"
         );
     }
@@ -808,7 +781,7 @@ mod tests {
         assert!(result.is_err(), "Should fail when L1 max-anchor block ID is not set");
         let err_msg = format!("{:?}", result.unwrap_err());
         assert!(
-            err_msg.contains("L1 max-anchor block ID not set"),
+            err_msg.contains("L1SLOAD context unset"),
             "Expected missing l1_max_anchor error: {err_msg}"
         );
     }

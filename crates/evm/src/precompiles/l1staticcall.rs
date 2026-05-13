@@ -20,7 +20,7 @@ use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 use reth_revm::precompile::{PrecompileError, PrecompileOutput, PrecompileResult};
 use tracing::{debug, error, trace, warn};
 
-use super::l1sload::{get_anchor_block_id, get_l1_max_anchor_block_id};
+use super::context::{get_anchor_block_id, get_l1_max_anchor_block_id};
 
 /// Fixed gas cost for an L1STATICCALL precompile call.
 const L1STATICCALL_FIXED_GAS: u64 = 2000;
@@ -113,11 +113,17 @@ pub fn set_l1_staticcall_value(
         // High-visibility because this should never happen in correct upstream
         // code — surge-raiko trims to the same ceiling before invoking the setter.
         // If this fires, the caller is buggy; fail loudly in logs but don't panic.
+        //
+        // We capture a backtrace so the caller (e.g. a surge-raiko code path) is
+        // obvious without needing to re-instrument. The downstream read-side error
+        // ("L1STATICCALL result not found in cache") is misleading on its own —
+        // this log is the canonical signal that a buggy caller was the root cause.
         error!(
             "L1STATICCALL: refusing to cache oversized return data — target={target:?} \
-             block={block_number} bytes={} (cap={})",
+             block={block_number} bytes={} (cap={})\nbacktrace:\n{}",
             result.len(),
             MAX_RETURN_DATA_SIZE,
+            std::backtrace::Backtrace::capture(),
         );
         return;
     }
@@ -241,14 +247,22 @@ pub fn l1staticcall_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
         Some(id) => id,
         None => {
             warn!("L1STATICCALL: anchor block ID not set");
-            return Err(PrecompileError::Other("Anchor block ID not set".into()));
+            return Err(PrecompileError::Other(
+                "L1STATICCALL context unset (likely L1 precompiles aren't enabled for this fork \
+                 or the host hasn't called set_anchor_block_id for the current block)"
+                    .into(),
+            ));
         }
     };
     let l1_max_anchor_block_id = match get_l1_max_anchor_block_id() {
         Some(id) => id,
         None => {
             warn!("L1STATICCALL: L1 max-anchor block ID not set");
-            return Err(PrecompileError::Other("L1 max-anchor block ID not set".into()));
+            return Err(PrecompileError::Other(
+                "L1STATICCALL context unset (likely L1 precompiles aren't enabled for this fork \
+                 or the host hasn't called set_l1_max_anchor_block_id for the current block)"
+                    .into(),
+            ));
         }
     };
 
@@ -542,7 +556,7 @@ mod tests {
         let result = l1staticcall_run(&input, expected_gas(0));
         assert!(result.is_err(), "Should fail without anchor block ID");
         let msg = format!("{:?}", result.unwrap_err());
-        assert!(msg.contains("Anchor block ID not set"), "Got: {msg}");
+        assert!(msg.contains("L1STATICCALL context unset"), "Got: {msg}");
     }
 
     #[test]
@@ -556,7 +570,7 @@ mod tests {
         let result = l1staticcall_run(&input, expected_gas(0));
         assert!(result.is_err(), "Should fail without L1 max-anchor block ID");
         let msg = format!("{:?}", result.unwrap_err());
-        assert!(msg.contains("L1 max-anchor block ID not set"), "Got: {msg}");
+        assert!(msg.contains("L1STATICCALL context unset"), "Got: {msg}");
     }
 
     // ── Cache miss without RPC ────────────────────────────────────────
