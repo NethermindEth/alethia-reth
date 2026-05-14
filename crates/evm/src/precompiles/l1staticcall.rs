@@ -305,6 +305,16 @@ pub fn l1staticcall_run(input: &[u8], gas_limit: u64) -> PrecompileResult {
         // Clamp cached L1 gas the same way the RPC path does — keeps the two branches
         // symmetric so a cache entry seeded by an earlier caller with a larger budget
         // cannot overcharge a later caller with a smaller `gas_limit`.
+        //
+        // **ZK-proving note.** Because the L1 gas is clamped by the *caller's* `gas_limit`,
+        // two otherwise-identical L2 transactions can be charged different amounts depending
+        // on which of them ran first (cache-miss with a large budget) and which ran second
+        // (cache-hit clamped to a smaller budget). This is deterministic — same `gas_limit`
+        // always yields the same charge — so it is safe for ZK proving as long as the
+        // preflight and the prover both re-execute with the *same* `gas_limit` (revm
+        // forwards the call's gas budget here in both runs). It would only become a hazard
+        // if a discovery path observed gas under one budget and the verification path
+        // observed gas under a different budget for the same (target, block, calldata).
         let effective_gas_limit = gas_limit.min(L1_CALL_MAX_GAS_CAP);
         (cached_gas.min(effective_gas_limit), cached_data, cached_reverted)
     } else {

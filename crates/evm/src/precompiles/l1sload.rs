@@ -20,6 +20,12 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use reth_revm::precompile::{PrecompileError, PrecompileOutput, PrecompileResult};
 use tracing::{debug, trace, warn};
 
+// Re-export the shared anchor context functions through this module so historical callers
+// (notably raiko) can continue to import
+// `alethia_reth_evm::precompiles::l1sload::{set_anchor_block_id, ...}` without changing their
+// import paths. The functions live in [`super::context`] and operate on the **same** globals that
+// `l1staticcall::l1staticcall_run` reads via `super::context::get_*` — there is one `(anchor,
+// l1_max_anchor)` pair shared between the two precompiles, not two separate copies.
 pub use super::context::{
     clear_anchor_context, get_anchor_block_id, get_l1_max_anchor_block_id, set_anchor_block_id,
     set_l1_max_anchor_block_id,

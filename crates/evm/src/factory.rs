@@ -60,6 +60,7 @@ impl EvmFactory for TaikoEvmFactory {
         let spec_id = input.cfg_env.spec;
         let precompiles = taiko_precompiles_map(
             reth_revm::precompile::PrecompileSpecId::from_spec_id(spec_id.into()),
+            spec_id,
         );
         let taiko_evm = TaikoEvmContext::taiko_mainnet()
             .with_cfg(input.cfg_env)
@@ -81,6 +82,7 @@ impl EvmFactory for TaikoEvmFactory {
         let spec_id = input.cfg_env.spec;
         let precompiles = taiko_precompiles_map(
             reth_revm::precompile::PrecompileSpecId::from_spec_id(spec_id.into()),
+            spec_id,
         );
         let taiko_evm = TaikoEvmContext::taiko_mainnet()
             .with_cfg(input.cfg_env)

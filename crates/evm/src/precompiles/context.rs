@@ -50,6 +50,17 @@ pub fn get_l1_max_anchor_block_id() -> Option<u64> {
 }
 
 /// Clear both anchor context globals — used by `clear_l1_storage` / `clear_all_precompile_state`.
+///
+/// **Non-atomic by design.** The two globals are reset in sequence, releasing the first
+/// mutex before acquiring the second. Under the documented single-threaded invariant
+/// (host driver + raiko's `acquire_l1_precompile_lock`), no concurrent reader can observe
+/// the intermediate `(None, Some(_))` state — the lock that protects the entire
+/// `prepare → execute → finalize` cycle is held by the same caller that invokes this
+/// reset. Combining both fields into a single `Mutex<(Option<u64>, Option<u64>)>` would
+/// also require lock-stepping every setter and reader (`set_anchor_block_id`,
+/// `set_l1_max_anchor_block_id`, `get_*`), so the same atomicity concern would apply at
+/// every call site, not just the clear. If the single-threaded contract is ever relaxed,
+/// revisit this as part of the same refactor.
 pub fn clear_anchor_context() {
     *CURRENT_ANCHOR_BLOCK_ID.lock().expect("CURRENT_ANCHOR_BLOCK_ID mutex poisoned") = None;
     *CURRENT_L1_MAX_ANCHOR_BLOCK_ID
